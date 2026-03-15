@@ -47,6 +47,9 @@ private final class WallpaperSession {
         playerLayer.videoGravity = gravity
         
         if url == currentURL {
+            playerLayer.videoGravity = gravity
+            player?.isMuted = wallpaper.isMuted
+            player?.volume = wallpaper.volume
             window.show()
             return
         }
@@ -271,7 +274,9 @@ public final class WallpaperController: ObservableObject {
 
         configStore.$configs
             .sink { [weak self] _ in
-                self?.spaceMonitor.refresh()
+                Task { @MainActor [weak self] in
+                    self?.spaceMonitor.refresh()
+                }
             }
             .store(in: &cancellables)
     }
