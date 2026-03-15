@@ -4,51 +4,45 @@ import XCTest
 final class VideoValidationTests: XCTestCase {
     
     // MARK: - File Extension Validation
-    
-    private let supportedExtensions: Set<String> = ["mp4", "mov", "m4v"]
-    
-    private func isValidVideoFile(_ url: URL) -> Bool {
-        supportedExtensions.contains(url.pathExtension.lowercased())
-    }
-    
+
     func testAcceptsMP4() {
         let url = URL(fileURLWithPath: "/tmp/test.mp4")
-        XCTAssertTrue(isValidVideoFile(url))
+        XCTAssertTrue(isValidLivelyVideoFile(url))
     }
     
     func testAcceptsMOV() {
         let url = URL(fileURLWithPath: "/tmp/test.mov")
-        XCTAssertTrue(isValidVideoFile(url))
+        XCTAssertTrue(isValidLivelyVideoFile(url))
     }
     
     func testAcceptsM4V() {
         let url = URL(fileURLWithPath: "/tmp/test.m4v")
-        XCTAssertTrue(isValidVideoFile(url))
+        XCTAssertTrue(isValidLivelyVideoFile(url))
     }
     
     func testAcceptsUppercaseExtension() {
         let url = URL(fileURLWithPath: "/tmp/test.MP4")
-        XCTAssertTrue(isValidVideoFile(url))
+        XCTAssertTrue(isValidLivelyVideoFile(url))
     }
     
     func testRejectsPNG() {
         let url = URL(fileURLWithPath: "/tmp/test.png")
-        XCTAssertFalse(isValidVideoFile(url))
+        XCTAssertFalse(isValidLivelyVideoFile(url))
     }
     
     func testRejectsTXT() {
         let url = URL(fileURLWithPath: "/tmp/test.txt")
-        XCTAssertFalse(isValidVideoFile(url))
+        XCTAssertFalse(isValidLivelyVideoFile(url))
     }
     
     func testRejectsGIF() {
         let url = URL(fileURLWithPath: "/tmp/test.gif")
-        XCTAssertFalse(isValidVideoFile(url))
+        XCTAssertFalse(isValidLivelyVideoFile(url))
     }
     
     func testRejectsNoExtension() {
         let url = URL(fileURLWithPath: "/tmp/testfile")
-        XCTAssertFalse(isValidVideoFile(url))
+        XCTAssertFalse(isValidLivelyVideoFile(url))
     }
     
     // MARK: - DynamicWallpaper Display Settings

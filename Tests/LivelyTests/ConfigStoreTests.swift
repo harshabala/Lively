@@ -37,22 +37,24 @@ final class ConfigStoreTests: XCTestCase {
         XCTAssertEqual(configStore.configs[spaceKey]?.dynamicWallpaper.mode, .staticVideo)
     }
 
-    func testPersistence() async {
-        let spaceKey = "test-display:file:///test/persist.png"
-        let tempVideo = FileManager.default.temporaryDirectory.appendingPathComponent("persist_video.mp4")
+    func testPersistenceRoundTrip() async throws {
+        let spaceKey = "test-display:file:///test/roundtrip.png"
+        let tempVideo = FileManager.default.temporaryDirectory.appendingPathComponent("roundtrip.mp4")
         FileManager.default.createFile(atPath: tempVideo.path, contents: Data(), attributes: nil)
         defer { try? FileManager.default.removeItem(at: tempVideo) }
-        
+
         var wallpaper = DynamicWallpaper()
         wallpaper.mode = .staticVideo
         wallpaper.staticURL = tempVideo
-        
+
         configStore.assign(dynamicWallpaper: wallpaper, toSpaceKey: spaceKey)
-        
-        // Verify in-memory state is correct (persistence is debounced asynchronously)
-        XCTAssertNotNil(configStore.configs[spaceKey])
-        XCTAssertEqual(configStore.configs[spaceKey]?.dynamicWallpaper.staticURL, tempVideo)
-        XCTAssertEqual(configStore.configs[spaceKey]?.dynamicWallpaper.mode, .staticVideo)
+        // Bypass the 300 ms debounce and write synchronously
+        configStore.flushPendingPersist()
+
+        // Load a brand-new ConfigStore from the same file — this proves the disk round-trip
+        let freshStore = ConfigStore(configFileURL: tempFileURL)
+        XCTAssertNotNil(freshStore.configs[spaceKey], "Config should survive a process restart")
+        XCTAssertEqual(freshStore.configs[spaceKey]?.dynamicWallpaper.mode, .staticVideo)
     }
     
     func testRemove() async {

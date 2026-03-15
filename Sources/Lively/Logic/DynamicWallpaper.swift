@@ -52,3 +52,13 @@ public struct DynamicWallpaper: Codable, Equatable, Sendable {
         }
     }
 }
+
+// MARK: - Video Validation
+
+/// The video file extensions that Lively accepts as wallpapers.
+public let supportedVideoExtensions: Set<String> = ["mp4", "mov", "m4v"]
+
+/// Returns `true` when `url` points to a video file format supported by Lively.
+public func isValidLivelyVideoFile(_ url: URL) -> Bool {
+    supportedVideoExtensions.contains(url.pathExtension.lowercased())
+}

@@ -50,6 +50,7 @@ private final class WallpaperSession {
             playerLayer.videoGravity = gravity
             player?.isMuted = wallpaper.isMuted
             player?.volume = wallpaper.volume
+            player?.play()   // ensure playing (handles resume via synchronize)
             window.show()
             return
         }
@@ -79,10 +80,12 @@ private final class WallpaperSession {
         }
         
         // Observe errors to bubble up
-        errorObservation = newPlayer.currentItem?.observe(\.status, options: [.new]) { item, _ in
+        errorObservation = newPlayer.currentItem?.observe(\.status, options: [.new]) { [weak self] item, _ in
             if item.status == .failed, let error = item.error {
                 LivelyLogger.wallpaper.error("AVPlayerItem failed: \(error.localizedDescription)")
                 DispatchQueue.main.async {
+                    // Clear currentURL so the next synchronize() call can retry
+                    self?.currentURL = nil
                     onError(error)
                 }
             }
@@ -183,15 +186,18 @@ private final class WallpaperSessionManager {
         isPaused: Bool,
         onPlaybackError: @escaping @Sendable (String, String) -> Void
     ) {
-        guard !isPaused else { return }
-
         let liveDisplayIDs = Set(spaces.map(\.id))
 
+        // Always clean up sessions for displays that are no longer connected,
+        // even when paused — a disconnected monitor should never keep a hidden window alive.
         for id in sessions.keys where !liveDisplayIDs.contains(id) {
             sessions[id]?.hide()
             sessions.removeValue(forKey: id)
             bookmarkManager.stopScopes(withPrefix: id)
         }
+
+        // While paused, skip playback updates; togglePause() will re-sync on resume.
+        guard !isPaused else { return }
 
         for space in spaces {
             var session = sessions[space.id]
@@ -259,7 +265,9 @@ public final class WallpaperController: ObservableObject {
         if isPaused {
             sessionManager.allSessions.values.forEach { $0.pause() }
         } else {
-            sessionManager.allSessions.values.forEach { $0.resume() }
+            // Re-sync rather than just resuming, so any config or space changes
+            // that arrived while paused are picked up immediately.
+            synchronize(to: spaceMonitor.screenSpaces)
         }
     }
 

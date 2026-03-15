@@ -33,6 +33,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupMenuBar()
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        configStore.flushPendingPersist()
+    }
+
     // MARK: - Menu Bar
 
     private func setupMenuBar() {

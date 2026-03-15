@@ -224,6 +224,25 @@ public class ConfigStore: ObservableObject {
         persistQueue.asyncAfter(deadline: .now() + .milliseconds(300), execute: workItem)
     }
 
+    /// Synchronously flushes any debounced pending write to disk.
+    /// Must be called before the process exits to prevent data loss.
+    public func flushPendingPersist() {
+        guard let pending = pendingPersistWorkItem else { return }
+        pending.cancel()
+        pendingPersistWorkItem = nil
+
+        let snapshot = configs
+        persistQueue.sync {
+            do {
+                let data = try JSONEncoder().encode(snapshot)
+                try data.write(to: self.configFileURL, options: .atomic)
+                LivelyLogger.config.info("Config flushed synchronously on exit")
+            } catch {
+                LivelyLogger.config.error("Failed to flush config on exit: \(error.localizedDescription)")
+            }
+        }
+    }
+
     private func load() {
         let fm = FileManager.default
         guard fm.fileExists(atPath: configFileURL.path) else {

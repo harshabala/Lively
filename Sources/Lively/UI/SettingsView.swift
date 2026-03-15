@@ -183,11 +183,6 @@ private struct PauseResumeButton: View {
 // MARK: - Supported Video Types
 
 private let supportedVideoTypes: [UTType] = [.mpeg4Movie, .quickTimeMovie, .movie]
-private let supportedExtensions: Set<String> = ["mp4", "mov", "m4v"]
-
-private func isValidVideoFile(_ url: URL) -> Bool {
-    supportedExtensions.contains(url.pathExtension.lowercased())
-}
 
 // MARK: - Video Thumbnail Generator
 
@@ -592,7 +587,7 @@ private struct ScreenCard: View {
                 else { return }
 
                 Task { @MainActor in
-                    if isValidVideoFile(url) {
+                    if isValidLivelyVideoFile(url) {
                         // Dead file check
                         // For dropped files from outside the app container, we need to check if they
                         // actually exist and are reachable before bookmarking them
@@ -644,7 +639,7 @@ private struct ScreenCard: View {
 
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            if isValidVideoFile(url) {
+            if isValidLivelyVideoFile(url) {
                 onPick(url)
             }
         }
