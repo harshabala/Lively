@@ -9,28 +9,30 @@ public struct LoggerView: View {
     
     public var body: some View {
         VStack(spacing: 0) {
-            Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    isExpanded.toggle()
+            HStack {
+                Text("View and copy application logs for troubleshooting.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(LivelyBrand.mutedForeground)
+                
+                Spacer()
+                
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(isExpanded ? "Hide Logs" : "View Logs")
+                            .font(.system(size: 12, weight: .medium))
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
                 }
-            } label: {
-                HStack {
-                    Spacer()
-                    Text(isExpanded ? "Hide Logs" : "View Logs")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(LivelyBrand.foreground)
-                    Spacer()
-                }
-                .overlay(alignment: .trailing) {
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(LivelyBrand.foreground)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .background(RoundedRectangle(cornerRadius: 6).strokeBorder(LivelyBrand.border.opacity(0.35)))
             }
-            .buttonStyle(.plain)
             
             if isExpanded {
                 ScrollViewReader { proxy in
@@ -106,7 +108,5 @@ public struct LoggerView: View {
                 .padding(.vertical, 12)
             }
         }
-        .background(RoundedRectangle(cornerRadius: LivelyBrand.Radius.md).fill(Color(nsColor: .windowBackgroundColor)))
-        .overlay(RoundedRectangle(cornerRadius: LivelyBrand.Radius.md).strokeBorder(LivelyBrand.border.opacity(0.2)))
     }
 }
