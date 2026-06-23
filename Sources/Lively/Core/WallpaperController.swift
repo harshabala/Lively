@@ -166,6 +166,10 @@ private final class BookmarkManager {
     }
 
     private func startScope(for spaceKey: String, url: URL) {
+        if let existing = activeScopes[spaceKey], existing == url {
+            // Already scoped for this exact URL
+            return
+        }
         stopScope(for: spaceKey)
         let didStart = url.startAccessingSecurityScopedResource()
         if didStart {

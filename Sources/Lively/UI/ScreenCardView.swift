@@ -102,7 +102,9 @@ struct ScreenCardView: View {
                 dropZone(
                     title: currentWallpaper.mode == .appearance ? "Light mode" : "",
                     icon: currentWallpaper.mode == .appearance ? "sun.max.fill" : "film",
-                    url: currentWallpaper.mode == .appearance ? currentWallpaper.lightURL : currentWallpaper.staticURL,
+                    url: currentWallpaper.mode == .appearance 
+                        ? configStore.resolveBookmark(for: space.spaceKey, bookmarkKey: "light", fallbackURL: currentWallpaper.lightURL)
+                        : configStore.resolveBookmark(for: space.spaceKey, bookmarkKey: "static", fallbackURL: currentWallpaper.staticURL),
                     isTargeted: currentWallpaper.mode == .appearance ? $isTargetedLight : $isTargetedMain,
                     onDrop: { url in
                         var updated = currentWallpaper
@@ -119,7 +121,7 @@ struct ScreenCardView: View {
                     dropZone(
                         title: "Dark mode",
                         icon: "moon.stars.fill",
-                        url: currentWallpaper.darkURL,
+                        url: configStore.resolveBookmark(for: space.spaceKey, bookmarkKey: "dark", fallbackURL: currentWallpaper.darkURL),
                         isTargeted: $isTargetedDark,
                         onDrop: { url in
                             var updated = currentWallpaper
