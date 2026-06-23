@@ -1,14 +1,14 @@
-import XCTest
+import Testing
 import Combine
 @testable import LivelyCore
+import Foundation
 
 @MainActor
-final class WallpaperControllerTests: XCTestCase {
+struct WallpaperControllerTests {
 
-    func testPlaybackErrorBubblesToSubject() {
+    @Test func playbackErrorBubblesToSubject() {
         let monitor = SpaceMonitor()
         let tempFile = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
-        // Use an empty config so WallpaperController won't try to create windows
         let store = ConfigStore(configFileURL: tempFile)
         defer { try? FileManager.default.removeItem(at: tempFile) }
 
@@ -25,12 +25,12 @@ final class WallpaperControllerTests: XCTestCase {
         // PassthroughSubject.send is synchronous — sink fires immediately
         controller.playbackErrors.send(("test-space", "Simulated error"))
 
-        XCTAssertEqual(receivedSpaceKey, "test-space")
-        XCTAssertEqual(receivedMessage, "Simulated error")
+        #expect(receivedSpaceKey == "test-space")
+        #expect(receivedMessage == "Simulated error")
         cancellable.cancel()
     }
-    
-    func testTogglePause() {
+
+    @Test func togglePause() {
         let monitor = SpaceMonitor()
         let tempFile = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
         let store = ConfigStore(configFileURL: tempFile)
@@ -38,14 +38,14 @@ final class WallpaperControllerTests: XCTestCase {
 
         let controller = WallpaperController(spaceMonitor: monitor, configStore: store)
 
-        XCTAssertFalse(controller.isPaused)
+        #expect(!controller.isPaused)
         controller.togglePause()
-        XCTAssertTrue(controller.isPaused)
+        #expect(controller.isPaused)
         controller.togglePause()
-        XCTAssertFalse(controller.isPaused)
+        #expect(!controller.isPaused)
     }
 
-    func testResumeAfterPauseTriggersSynchronize() {
+    @Test func resumeAfterPauseDoesNotCrash() {
         let monitor = SpaceMonitor()
         let tempFile = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
         let store = ConfigStore(configFileURL: tempFile)
@@ -53,10 +53,9 @@ final class WallpaperControllerTests: XCTestCase {
 
         let controller = WallpaperController(spaceMonitor: monitor, configStore: store)
 
-        // Pause then immediately resume — should not crash, isPaused should be false
         controller.togglePause()
-        XCTAssertTrue(controller.isPaused)
+        #expect(controller.isPaused)
         controller.togglePause()
-        XCTAssertFalse(controller.isPaused, "Controller should be playing after second toggle")
+        #expect(!controller.isPaused, "Controller should be playing after second toggle")
     }
 }

@@ -1,11 +1,22 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # Configuration
 APP_NAME="Lively"
-BUILD_DIR=".build/release"
-OUTPUT_DIR="Output"
+OUTPUT_DIR="${LIVELY_OUTPUT_DIR:-/private/tmp/LivelyOutput}"
 APP_BUNDLE="${OUTPUT_DIR}/${APP_NAME}.app"
 EXECUTABLE_NAME="LivelyApp"
+WORKSPACE_CACHE=".build/package-cache"
+BUILD_PATH="${WORKSPACE_CACHE}/swift-build"
+BUILD_DIR="${BUILD_PATH}/release"
+
+mkdir -p "${WORKSPACE_CACHE}/swiftpm" "${WORKSPACE_CACHE}/swiftpm-security" "${WORKSPACE_CACHE}/clang" "${BUILD_PATH}"
+
+export SWIFTPM_CACHE_PATH="${PWD}/${WORKSPACE_CACHE}/swiftpm"
+export SWIFTPM_CONFIG_PATH="${PWD}/${WORKSPACE_CACHE}/swiftpm-security"
+export CLANG_MODULE_CACHE_PATH="${PWD}/${WORKSPACE_CACHE}/clang"
+export SWIFT_BUILD_PATH="${PWD}/${BUILD_PATH}"
 
 # Clean previous build
 echo "🧹 Cleaning previous build..."
@@ -14,10 +25,11 @@ mkdir -p "${OUTPUT_DIR}"
 
 # Build with Swift Package Manager
 echo "🔨 Building Release configuration..."
-swift build -c release
+swift build -c release --build-path "${BUILD_PATH}"
 
-if [ $? -ne 0 ]; then
-    echo "❌ Build failed!"
+EXECUTABLE_PATH="$(find "${BUILD_PATH}" -path "*/release/${EXECUTABLE_NAME}" -type f -perm +111 | head -n 1)"
+if [ -z "${EXECUTABLE_PATH}" ]; then
+    echo "❌ Could not find built executable ${EXECUTABLE_NAME} under ${BUILD_PATH}"
     exit 1
 fi
 
@@ -28,7 +40,7 @@ mkdir -p "${APP_BUNDLE}/Contents/Resources"
 
 # Copy Executable
 echo "📋 Copying executable..."
-cp "${BUILD_DIR}/${EXECUTABLE_NAME}" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
+cp "${EXECUTABLE_PATH}" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
 
 # Create Info.plist
 echo "📝 Creating Info.plist..."
@@ -58,7 +70,9 @@ EOF
 # Code Signing (Ad-hoc)
 # Required for SMAppService to work locally
 echo "🔏 Signing application..."
+xattr -cr "${APP_BUNDLE}" 2>/dev/null || true
 codesign --force --deep --options runtime --sign - --entitlements entitlements.plist "${APP_BUNDLE}"
+xattr -d com.apple.FinderInfo "${APP_BUNDLE}" 2>/dev/null || true
 
 echo "✅ Packaging complete!"
 echo "🚀 App located at: ${APP_BUNDLE}"

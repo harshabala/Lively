@@ -13,7 +13,7 @@ private final class WallpaperSession {
     private let playerLayer: AVPlayerLayer
     private var player: AVPlayer?
     private var loopObserver: Any?
-    private var errorObservation: NSKeyValueObservation?
+    private var errorObservation: AnyCancellable?
     private(set) var currentURL: URL?
 
     init(screen: NSScreen) {
@@ -80,16 +80,17 @@ private final class WallpaperSession {
         }
         
         // Observe errors to bubble up
-        errorObservation = newPlayer.currentItem?.observe(\.status, options: [.new]) { [weak self] item, _ in
-            if item.status == .failed, let error = item.error {
+        // KVO callbacks can fire on arbitrary queues. By using Combine, we ensure
+        // the closure executes on the main thread and avoids @MainActor isolation crashes.
+        errorObservation = newPlayer.currentItem?.publisher(for: \.status)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self, weak newPlayer] status in
+                guard status == .failed, let error = newPlayer?.currentItem?.error else { return }
                 LivelyLogger.wallpaper.error("AVPlayerItem failed: \(error.localizedDescription)")
-                DispatchQueue.main.async {
-                    // Clear currentURL so the next synchronize() call can retry
-                    self?.currentURL = nil
-                    onError(error)
-                }
+                // Clear currentURL so the next synchronize() call can retry
+                self?.currentURL = nil
+                onError(error)
             }
-        }
 
         // Connect player to layer and start
         playerLayer.player = newPlayer
@@ -117,7 +118,7 @@ private final class WallpaperSession {
             NotificationCenter.default.removeObserver(observer)
             loopObserver = nil
         }
-        errorObservation?.invalidate()
+        errorObservation?.cancel()
         errorObservation = nil
         player?.pause()
         playerLayer.player = nil
@@ -158,6 +159,12 @@ private final class BookmarkManager {
         }
     }
 
+    func stopAllScopes() {
+        for key in activeScopes.keys {
+            stopScope(for: key)
+        }
+    }
+
     private func startScope(for spaceKey: String, url: URL) {
         stopScope(for: spaceKey)
         let didStart = url.startAccessingSecurityScopedResource()
@@ -176,6 +183,14 @@ private final class WallpaperSessionManager {
 
     var allSessions: [String: WallpaperSession] {
         sessions
+    }
+
+    func tearDownAll(bookmarkManager: BookmarkManager) {
+        for (_, session) in sessions {
+            session.hide()
+        }
+        sessions.removeAll()
+        bookmarkManager.stopAllScopes()
     }
 
     func synchronize(
@@ -206,7 +221,8 @@ private final class WallpaperSessionManager {
                 sessions[space.id] = session
             }
 
-            let wallpaperConfig = configStore.configs[space.spaceKey]?.dynamicWallpaper ?? DynamicWallpaper()
+            let spaceKey = space.spaceKey  // capture before Sendable closure
+            let wallpaperConfig = configStore.configs[spaceKey]?.dynamicWallpaper ?? DynamicWallpaper()
 
             if let videoURL = bookmarkManager.urlForSpace(space, appearance: appearance) {
                 session?.play(
@@ -214,11 +230,11 @@ private final class WallpaperSessionManager {
                     wallpaper: wallpaperConfig,
                     screen: space.screen,
                     onError: { error in
-                        onPlaybackError(space.spaceKey, error.localizedDescription)
+                        onPlaybackError(spaceKey, error.localizedDescription)
                     }
                 )
             } else {
-                bookmarkManager.stopScope(for: space.spaceKey)
+                bookmarkManager.stopScope(for: spaceKey)
                 session?.hide()
             }
         }
@@ -245,7 +261,7 @@ public final class WallpaperController: ObservableObject {
     private let sessionManager: WallpaperSessionManager
     private var cancellables = Set<AnyCancellable>()
     
-    private var appearanceObserver: NSKeyValueObservation?
+    private var appearanceObserver: AnyCancellable?
 
     // MARK: - Init
 
@@ -259,6 +275,15 @@ public final class WallpaperController: ObservableObject {
     }
 
     // MARK: - Public Controls
+
+    /// Tears down all sessions and releases security-scoped resources.
+    /// Call from `applicationWillTerminate` before flushing config.
+    public func tearDown() {
+        sessionManager.tearDownAll(bookmarkManager: bookmarkManager)
+        appearanceObserver?.cancel()
+        appearanceObserver = nil
+        cancellables.removeAll()
+    }
 
     public func togglePause() {
         isPaused.toggle()
@@ -292,11 +317,11 @@ public final class WallpaperController: ObservableObject {
     private func setupAppearanceObserver() {
         // NSApp is nil in unit test contexts — skip observation
         guard let app = NSApp else { return }
-        appearanceObserver = app.observe(\.effectiveAppearance) { [weak self] _, _ in
-            Task { @MainActor in
+        appearanceObserver = app.publisher(for: \.effectiveAppearance)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
                 self?.spaceMonitor.refresh()
             }
-        }
     }
     
     // MARK: - Security-Scoped Access (Balanced)

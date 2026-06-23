@@ -60,10 +60,6 @@ class WallpaperWindow: NSWindow {
     /// below normal windows while remaining above the system wallpaper.
     /// Using `orderFront` would fight with Finder.
     func show() {
-        let desktopLevel = NSWindow.Level(
-            rawValue: Int(CGWindowLevelForKey(.desktopWindow)) + 1
-        )
-        self.level = desktopLevel
         orderBack(nil)
     }
 

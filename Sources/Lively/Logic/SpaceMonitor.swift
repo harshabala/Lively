@@ -4,7 +4,11 @@ import Combine
 // MARK: - ScreenSpace
 
 /// A snapshot of one physical display's active Space / wallpaper state.
-public struct ScreenSpace: Equatable, Identifiable, @unchecked Sendable {
+///
+/// This type is `@MainActor`-only — it holds an `NSScreen` reference which is
+/// not `Sendable`. Never pass instances across isolation boundaries.
+@MainActor
+public struct ScreenSpace: Equatable, Identifiable {
 
     /// Stable display identifier derived from CGDirectDisplayID.
     public let id: String
@@ -20,7 +24,7 @@ public struct ScreenSpace: Equatable, Identifiable, @unchecked Sendable {
         return "\(id):\(url.absoluteString)"
     }
 
-    public static func == (lhs: ScreenSpace, rhs: ScreenSpace) -> Bool {
+    nonisolated public static func == (lhs: ScreenSpace, rhs: ScreenSpace) -> Bool {
         lhs.id == rhs.id && lhs.desktopImageURL == rhs.desktopImageURL
     }
 }
@@ -67,9 +71,24 @@ public class SpaceMonitor: ObservableObject {
     // MARK: - Private
 
     private func handleSpaceChange() {
-        // macOS takes ~100 ms to propagate the new desktopImageURL after a Space switch.
+        // macOS takes a variable amount of time to propagate the new desktopImageURL
+        // after a Space switch. Poll every 50ms up to 500ms, stopping early once
+        // the URL actually changes (or if no previous state exists).
+        let previousURLs = Dictionary(
+            uniqueKeysWithValues: screenSpaces.map { ($0.id, $0.desktopImageURL) }
+        )
         Task {
-            try? await Task.sleep(for: .milliseconds(100))
+            for _ in 0..<10 {  // 10 × 50ms = 500ms max
+                try? await Task.sleep(for: .milliseconds(50))
+                let current = NSScreen.screens.compactMap { screen -> (String, URL?)? in
+                    let id = Self.displayID(for: screen)
+                    return (id, NSWorkspace.shared.desktopImageURL(for: screen))
+                }
+                let changed = current.contains { id, url in
+                    previousURLs[id] != url
+                }
+                if changed || previousURLs.isEmpty { break }
+            }
             refresh()
         }
     }

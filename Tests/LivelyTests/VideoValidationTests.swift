@@ -1,128 +1,117 @@
-import XCTest
+import Testing
 @testable import LivelyCore
+import Foundation
 
-final class VideoValidationTests: XCTestCase {
-    
+struct VideoValidationTests {
+
     // MARK: - File Extension Validation
 
-    func testAcceptsMP4() {
-        let url = URL(fileURLWithPath: "/tmp/test.mp4")
-        XCTAssertTrue(isValidLivelyVideoFile(url))
+    @Test func acceptsMP4() {
+        #expect(isValidLivelyVideoFile(URL(fileURLWithPath: "/tmp/test.mp4")))
     }
-    
-    func testAcceptsMOV() {
-        let url = URL(fileURLWithPath: "/tmp/test.mov")
-        XCTAssertTrue(isValidLivelyVideoFile(url))
+
+    @Test func acceptsMOV() {
+        #expect(isValidLivelyVideoFile(URL(fileURLWithPath: "/tmp/test.mov")))
     }
-    
-    func testAcceptsM4V() {
-        let url = URL(fileURLWithPath: "/tmp/test.m4v")
-        XCTAssertTrue(isValidLivelyVideoFile(url))
+
+    @Test func acceptsM4V() {
+        #expect(isValidLivelyVideoFile(URL(fileURLWithPath: "/tmp/test.m4v")))
     }
-    
-    func testAcceptsUppercaseExtension() {
-        let url = URL(fileURLWithPath: "/tmp/test.MP4")
-        XCTAssertTrue(isValidLivelyVideoFile(url))
+
+    @Test func acceptsUppercaseExtension() {
+        #expect(isValidLivelyVideoFile(URL(fileURLWithPath: "/tmp/test.MP4")))
     }
-    
-    func testRejectsPNG() {
-        let url = URL(fileURLWithPath: "/tmp/test.png")
-        XCTAssertFalse(isValidLivelyVideoFile(url))
+
+    @Test func rejectsPNG() {
+        #expect(!isValidLivelyVideoFile(URL(fileURLWithPath: "/tmp/test.png")))
     }
-    
-    func testRejectsTXT() {
-        let url = URL(fileURLWithPath: "/tmp/test.txt")
-        XCTAssertFalse(isValidLivelyVideoFile(url))
+
+    @Test func rejectsTXT() {
+        #expect(!isValidLivelyVideoFile(URL(fileURLWithPath: "/tmp/test.txt")))
     }
-    
-    func testRejectsGIF() {
-        let url = URL(fileURLWithPath: "/tmp/test.gif")
-        XCTAssertFalse(isValidLivelyVideoFile(url))
+
+    @Test func rejectsGIF() {
+        #expect(!isValidLivelyVideoFile(URL(fileURLWithPath: "/tmp/test.gif")))
     }
-    
-    func testRejectsNoExtension() {
-        let url = URL(fileURLWithPath: "/tmp/testfile")
-        XCTAssertFalse(isValidLivelyVideoFile(url))
+
+    @Test func rejectsNoExtension() {
+        #expect(!isValidLivelyVideoFile(URL(fileURLWithPath: "/tmp/testfile")))
     }
-    
+
     // MARK: - DynamicWallpaper Display Settings
-    
-    func testDefaultDisplaySettings() {
+
+    @Test func defaultDisplaySettings() {
         let wallpaper = DynamicWallpaper()
-        XCTAssertEqual(wallpaper.videoGravity, .fill)
-        XCTAssertTrue(wallpaper.isMuted)
-        XCTAssertEqual(wallpaper.volume, 0.0)
+        #expect(wallpaper.videoGravity == .fill)
+        #expect(wallpaper.isMuted)
+        #expect(wallpaper.volume == 0.0)
     }
-    
-    func testVideoGravityCodable() throws {
+
+    @Test func videoGravityCodable() throws {
         var wallpaper = DynamicWallpaper()
         wallpaper.videoGravity = .fit
         wallpaper.isMuted = false
         wallpaper.volume = 0.5
-        
+
         let data = try JSONEncoder().encode(wallpaper)
         let decoded = try JSONDecoder().decode(DynamicWallpaper.self, from: data)
-        
-        XCTAssertEqual(decoded.videoGravity, .fit)
-        XCTAssertFalse(decoded.isMuted)
-        XCTAssertEqual(decoded.volume, 0.5)
+
+        #expect(decoded.videoGravity == .fit)
+        #expect(!decoded.isMuted)
+        #expect(decoded.volume == 0.5)
     }
-    
-    func testVideoGravityEnum() {
-        XCTAssertEqual(VideoGravity.fill.rawValue, "fill")
-        XCTAssertEqual(VideoGravity.fit.rawValue, "fit")
-        XCTAssertEqual(VideoGravity.allCases.count, 2)
+
+    @Test func videoGravityEnum() {
+        #expect(VideoGravity.fill.rawValue == "fill")
+        #expect(VideoGravity.fit.rawValue == "fit")
+        #expect(VideoGravity.allCases.count == 2)
     }
-    
+
     // MARK: - ConfigStore Bookmark Integration
-    
-    @MainActor
-    func testResolvedURLReturnsNilForMissingKey() async {
+
+    @Test @MainActor func resolvedURLReturnsNilForMissingKey() async {
         let tempFile = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
         defer { try? FileManager.default.removeItem(at: tempFile) }
-        
+
         let store = ConfigStore(configFileURL: tempFile)
         let result = store.resolvedURL(for: "nonexistent-key", appearance: nil)
-        XCTAssertNil(result)
+        #expect(result == nil)
     }
-    
-    @MainActor
-    func testResolvedURLReturnsValueForValidConfig() async {
+
+    @Test @MainActor func resolvedURLReturnsValueForValidConfig() async {
         let tempFile = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
-        let tempVideo = FileManager.default.temporaryDirectory.appendingPathComponent("test_resolved.mp4")
+        let tempVideo = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "_resolved.mp4")
         FileManager.default.createFile(atPath: tempVideo.path, contents: Data(), attributes: nil)
         defer {
             try? FileManager.default.removeItem(at: tempFile)
             try? FileManager.default.removeItem(at: tempVideo)
         }
-        
+
         let store = ConfigStore(configFileURL: tempFile)
         var wallpaper = DynamicWallpaper()
         wallpaper.mode = .staticVideo
         wallpaper.staticURL = tempVideo
-        
+
         store.assign(dynamicWallpaper: wallpaper, toSpaceKey: "test-key")
         let result = store.resolvedURL(for: "test-key", appearance: nil)
-        XCTAssertNotNil(result)
+        #expect(result != nil)
     }
-    
+
     // MARK: - Backward Compatibility
-    
-    func testOldConfigWithoutNewFieldsDecodes() throws {
-        // Simulate a config saved before videoGravity/isMuted/volume were added
+
+    @Test func oldConfigWithoutNewFieldsDecodes() throws {
         let json = """
         {
             "mode": "static",
             "staticURL": "file:///tmp/video.mp4"
         }
         """
-        let data = json.data(using: .utf8)!
+        let data = try #require(json.data(using: .utf8))
         let decoded = try JSONDecoder().decode(DynamicWallpaper.self, from: data)
-        
-        // New fields should fall back to defaults
-        XCTAssertEqual(decoded.videoGravity, .fill)
-        XCTAssertTrue(decoded.isMuted)
-        XCTAssertEqual(decoded.volume, 0.0)
-        XCTAssertEqual(decoded.mode, .staticVideo)
+
+        #expect(decoded.videoGravity == .fill)
+        #expect(decoded.isMuted)
+        #expect(decoded.volume == 0.0)
+        #expect(decoded.mode == .staticVideo)
     }
 }

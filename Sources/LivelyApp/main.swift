@@ -13,7 +13,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var statusItem: NSStatusItem!
-    private var settingsWindow: NSWindow?
+    private var popover: NSPopover!
+    private var eventMonitor: Any?
 
     // Core services — lazy so init order is explicit
     private let spaceMonitor = SpaceMonitor()
@@ -34,6 +35,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        wallpaperController.tearDown()
         configStore.flushPendingPersist()
     }
 
@@ -47,110 +49,47 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 systemSymbolName: "play.tv.fill",
                 accessibilityDescription: "Lively"
             )
+            button.action = #selector(togglePopover(_:))
+            button.target = self
         }
 
-        let menu = NSMenu()
-        menu.delegate = self
+        let view = SettingsContainerView(spaceMonitor: spaceMonitor, configStore: configStore)
+            .environmentObject(wallpaperController)
+        let hosting = NSHostingController(rootView: view)
 
-        menu.addItem(
-            withTitle: "Settings…",
-            action: #selector(openSettings),
-            keyEquivalent: ","
-        )
-        menu.addItem(.separator())
-
-        // Status indicator (non-interactive)
-        let statusItem = NSMenuItem(
-            title: "▶ Playing",
-            action: nil,
-            keyEquivalent: ""
-        )
-        statusItem.tag = 200
-        statusItem.isEnabled = false
-        menu.addItem(statusItem)
-        
-        let pauseItem = NSMenuItem(
-            title: "Pause Wallpapers",
-            action: #selector(togglePause),
-            keyEquivalent: "p"
-        )
-        pauseItem.tag = 100
-        menu.addItem(pauseItem)
-        menu.addItem(.separator())
-
-        menu.addItem(
-            withTitle: "Quit Lively",
-            action: #selector(NSApplication.terminate(_:)),
-            keyEquivalent: "q"
-        )
-
-        self.statusItem.menu = menu
+        popover = NSPopover()
+        popover.contentSize = NSSize(width: 480, height: 560)
+        popover.behavior = .transient
+        popover.contentViewController = hosting
     }
 
-    @objc private func togglePause() {
-        wallpaperController.togglePause()
-        updateMenuState()
+    @objc private func togglePopover(_ sender: AnyObject?) {
+        if popover.isShown {
+            closePopover(sender)
+        } else {
+            showPopover(sender)
+        }
     }
-    
-    private func updateMenuState() {
-        guard let menu = statusItem.menu else { return }
-        
-        if let pauseItem = menu.item(withTag: 100) {
-            pauseItem.title = wallpaperController.isPaused ? "Resume Wallpapers" : "Pause Wallpapers"
-        }
-        if let statusLabel = menu.item(withTag: 200) {
-            statusLabel.title = wallpaperController.isPaused ? "⏸ Paused" : "▶ Playing"
-        }
-        
-        // Update menu bar icon
+
+    private func showPopover(_ sender: AnyObject?) {
         if let button = statusItem.button {
-            let iconName = wallpaperController.isPaused ? "pause.circle.fill" : "play.tv.fill"
-            button.image = NSImage(
-                systemSymbolName: iconName,
-                accessibilityDescription: "Lively"
-            )
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: NSRectEdge.minY)
+            
+            // Close popover when clicking outside
+            eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+                if let self = self, self.popover.isShown {
+                    self.closePopover(event)
+                }
+            }
         }
     }
 
-    // MARK: - Settings Window
-
-    @objc func openSettings() {
-        if settingsWindow == nil {
-            let view = SettingsView(spaceMonitor: spaceMonitor, configStore: configStore)
-                .environmentObject(wallpaperController)
-            let hosting = NSHostingController(rootView: view)
-
-            let panel = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 480, height: 560),
-                styleMask: [
-                    .titled,
-                    .closable,
-                    .fullSizeContentView,
-                    .nonactivatingPanel
-                ],
-                backing: .buffered,
-                defer: false
-            )
-            panel.titlebarAppearsTransparent = true
-            panel.titleVisibility = .hidden
-            panel.isMovableByWindowBackground = true
-            panel.center()
-            panel.contentViewController = hosting
-            panel.isReleasedWhenClosed = false
-            panel.identifier = NSUserInterfaceItemIdentifier("lively.settings")
-            self.settingsWindow = panel
+    private func closePopover(_ sender: AnyObject?) {
+        popover.performClose(sender)
+        if let eventMonitor = eventMonitor {
+            NSEvent.removeMonitor(eventMonitor)
+            self.eventMonitor = nil
         }
-
-        settingsWindow?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-}
-
-// MARK: - NSMenuDelegate
-
-extension AppDelegate: NSMenuDelegate {
-    func menuWillOpen(_ menu: NSMenu) {
-        updateMenuState()
     }
 }
 
