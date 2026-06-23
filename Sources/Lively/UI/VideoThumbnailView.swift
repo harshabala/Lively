@@ -12,6 +12,9 @@ import AVFoundation
     }
 
     let nsImage = await Task.detached { () -> NSImage? in
+        let hasAccess = url.startAccessingSecurityScopedResource()
+        defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
+        
         let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true

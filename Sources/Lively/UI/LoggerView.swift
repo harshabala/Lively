@@ -97,12 +97,12 @@ public struct LoggerView: View {
                     } label: {
                         Text(isCopied ? "Copied" : "Copy Logs")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(isCopied ? LivelyBrand.accent : LivelyBrand.foreground)
+                            .foregroundStyle(isCopied ? LivelyBrand.primary : LivelyBrand.foreground)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                     }
                     .buttonStyle(.plain)
-                    .background(RoundedRectangle(cornerRadius: 6).strokeBorder(isCopied ? LivelyBrand.accent : LivelyBrand.border.opacity(0.35)))
+                    .background(RoundedRectangle(cornerRadius: 6).strokeBorder(isCopied ? LivelyBrand.primary : LivelyBrand.border.opacity(0.35)))
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
