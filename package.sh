@@ -42,6 +42,11 @@ mkdir -p "${APP_BUNDLE}/Contents/Resources"
 echo "📋 Copying executable..."
 cp "${EXECUTABLE_PATH}" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
 
+if [ -f "AppIcon.icns" ]; then
+    echo "🖼️ Copying App Icon..."
+    cp "AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
+fi
+
 # Create Info.plist
 echo "📝 Creating Info.plist..."
 cat > "${APP_BUNDLE}/Contents/Info.plist" <<EOF
@@ -55,6 +60,8 @@ cat > "${APP_BUNDLE}/Contents/Info.plist" <<EOF
     <string>com.lively.app</string>
     <key>CFBundleName</key>
     <string>${APP_NAME}</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleShortVersionString</key>
     <string>1.0</string>
     <key>CFBundleVersion</key>
