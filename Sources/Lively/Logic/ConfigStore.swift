@@ -150,6 +150,9 @@ public class ConfigStore: ObservableObject {
                 LivelyLogger.config.error("Bookmark resolution failed for \(bookmarkKey). Primary error: \(error.localizedDescription). Legacy fallback error: \(legacyError.localizedDescription)")
                 return FileManager.default.fileExists(atPath: url.path) ? url : nil
             }
+        }
+    }
+    
     /// Resolves a specific bookmark key directly, returning a security-scoped URL.
     /// Used by secondary components like VideoThumbnailView to gain access.
     public func resolveBookmark(for spaceKey: String, bookmarkKey: String, fallbackURL: URL?) -> URL? {
