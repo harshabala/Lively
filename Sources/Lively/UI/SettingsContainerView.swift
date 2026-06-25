@@ -9,6 +9,7 @@ public enum LivelyTab: Hashable {
 
 private struct PrimaryTabBar: View {
     @Binding var selection: LivelyTab
+    @Namespace private var tabIndicator
 
     var body: some View {
         HStack(spacing: 2) {
@@ -21,7 +22,7 @@ private struct PrimaryTabBar: View {
 
     private func tabButton(_ label: String, tab: LivelyTab) -> some View {
         Button {
-            selection = tab
+            withAnimation(LivelyBrand.Motion.fast) { selection = tab }
         } label: {
             Text(label)
                 .font(.system(size: 12, weight: .semibold))
@@ -38,6 +39,7 @@ private struct PrimaryTabBar: View {
                         RoundedRectangle(cornerRadius: 6)
                             .fill(.background)
                             .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
+                            .matchedGeometryEffect(id: "pill", in: tabIndicator)
                     }
                 }
         }

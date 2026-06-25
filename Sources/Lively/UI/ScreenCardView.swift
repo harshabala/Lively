@@ -9,6 +9,7 @@ private let supportedVideoTypes: [UTType] = [.mpeg4Movie, .quickTimeMovie, .movi
 
 private struct SecondaryTabBar: View {
     @Binding var selection: DynamicMode
+    @Namespace private var tabIndicator
 
     var body: some View {
         HStack(spacing: 2) {
@@ -21,7 +22,7 @@ private struct SecondaryTabBar: View {
 
     private func tabButton(_ label: String, mode: DynamicMode) -> some View {
         Button {
-            selection = mode
+            withAnimation(LivelyBrand.Motion.fast) { selection = mode }
         } label: {
             Text(label)
                 .font(.system(size: 12, weight: .semibold))
@@ -38,6 +39,7 @@ private struct SecondaryTabBar: View {
                         RoundedRectangle(cornerRadius: 6)
                             .fill(.background)
                             .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
+                            .matchedGeometryEffect(id: "pill", in: tabIndicator)
                     }
                 }
         }
