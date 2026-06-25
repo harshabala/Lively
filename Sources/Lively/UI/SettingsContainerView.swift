@@ -10,6 +10,7 @@ public enum LivelyTab: Hashable {
 private struct PrimaryTabBar: View {
     @Binding var selection: LivelyTab
     @Namespace private var tabIndicator
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 2) {
@@ -22,7 +23,7 @@ private struct PrimaryTabBar: View {
 
     private func tabButton(_ label: String, tab: LivelyTab) -> some View {
         Button {
-            withAnimation(LivelyBrand.Motion.fast) { selection = tab }
+            withAnimation(reduceMotion ? nil : LivelyBrand.Motion.fast) { selection = tab }
         } label: {
             Text(label)
                 .font(.system(size: 12, weight: .semibold))

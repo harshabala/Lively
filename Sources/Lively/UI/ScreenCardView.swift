@@ -10,6 +10,7 @@ private let supportedVideoTypes: [UTType] = [.mpeg4Movie, .quickTimeMovie, .movi
 private struct SecondaryTabBar: View {
     @Binding var selection: DynamicMode
     @Namespace private var tabIndicator
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 2) {
@@ -22,7 +23,7 @@ private struct SecondaryTabBar: View {
 
     private func tabButton(_ label: String, mode: DynamicMode) -> some View {
         Button {
-            withAnimation(LivelyBrand.Motion.fast) { selection = mode }
+            withAnimation(reduceMotion ? nil : LivelyBrand.Motion.fast) { selection = mode }
         } label: {
             Text(label)
                 .font(.system(size: 12, weight: .semibold))
@@ -509,9 +510,9 @@ struct ScreenCardView: View {
             }
         }
 
-        if scopeGranted { url.stopAccessingSecurityScopedResource() }
         errorMessage = nil
         onAccept(url)
+        if scopeGranted { url.stopAccessingSecurityScopedResource() }
     }
 
     private func openFilePicker(onPick: @escaping @MainActor (URL) -> Void) {

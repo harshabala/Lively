@@ -101,7 +101,7 @@ public struct LoggerView: View {
                                 Text(isCopied ? "Copied" : "Copy Logs")
                                     .contentTransition(.opacity)
                             }
-                            .animation(.spring(duration: 0.25, bounce: 0.2), value: isCopied)
+                            .animation(reduceMotion ? nil : .spring(duration: 0.25, bounce: 0.2), value: isCopied)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(isCopied ? LivelyBrand.primary : LivelyBrand.foreground)
                             .padding(.horizontal, 12)
