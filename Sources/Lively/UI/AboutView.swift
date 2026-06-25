@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 
 public struct AboutView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isCheckingForUpdates = false
     @State private var showUpdateAlert = false
     @State private var updateMessage = ""
@@ -57,10 +58,13 @@ public struct AboutView: View {
                         if isCheckingForUpdates {
                             ProgressView()
                                 .controlSize(.small)
+                                .transition(.opacity.combined(with: .scale(0.8)))
                         }
                         Text(isCheckingForUpdates ? "Checking..." : "Check for Updates...")
                             .font(.system(size: 12, weight: .medium))
+                            .contentTransition(.opacity)
                     }
+                    .animation(reduceMotion ? nil : .spring(duration: 0.25, bounce: 0), value: isCheckingForUpdates)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                 }
