@@ -33,14 +33,28 @@ public struct DisplaysView: View {
 
             if spaceMonitor.screenSpaces.isEmpty {
                 detectingView
+                    .transition(.opacity.combined(with: .offset(y: 8)))
             } else {
                 VStack(spacing: LivelyBrand.Spacing.md) {
-                    ForEach(spaceMonitor.screenSpaces) { space in
+                    ForEach(Array(spaceMonitor.screenSpaces.enumerated()), id: \.element.id) { index, space in
                         ScreenCardView(space: space, configStore: configStore)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .offset(y: 12)),
+                                removal: .opacity
+                            ))
+                            .animation(
+                                reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.1).delay(Double(index) * 0.07),
+                                value: spaceMonitor.screenSpaces.count
+                            )
                     }
                 }
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .offset(y: 8)),
+                    removal: .opacity
+                ))
             }
         }
+        .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: spaceMonitor.screenSpaces.isEmpty)
     }
 
     private var detectingView: some View {
