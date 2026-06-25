@@ -54,7 +54,10 @@ struct VideoThumbnailView: View {
                     .frame(height: 90)
                     .clipped()
                     .cornerRadius(6)
-                    .transition(.opacity.combined(with: .blurReplace))
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .offset(y: 4)),
+                        removal: .opacity
+                    ))
             } else if isLoading {
                 // Loading state
                 RoundedRectangle(cornerRadius: 6)
