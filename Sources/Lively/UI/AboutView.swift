@@ -89,16 +89,19 @@ public struct AboutView: View {
                     Text("Formats")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(LivelyBrand.foreground.opacity(0.8))
-                    Text("MP4, MOV, M4V • Up to 4K")
+                    Text("H.264 · HEVC (H.265)")
+                        .font(.system(size: 12))
+                        .foregroundStyle(LivelyBrand.mutedForeground)
+                    Text("MP4 · MOV · M4V · Up to 4K")
                         .font(.system(size: 12))
                         .foregroundStyle(LivelyBrand.mutedForeground)
                 }
-                
+
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Maximum Size")
+                    Text("File Size")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(LivelyBrand.foreground.opacity(0.8))
-                    Text("Unlimited. Supports full 4K movies\nusing native hardware acceleration.")
+                    Text("No limit. Hardware-accelerated\ndecoding for full 4K playback.")
                         .font(.system(size: 12))
                         .foregroundStyle(LivelyBrand.mutedForeground)
                         .lineLimit(2)
