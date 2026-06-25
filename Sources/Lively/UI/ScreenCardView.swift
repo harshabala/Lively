@@ -336,7 +336,10 @@ struct ScreenCardView: View {
                     .tint(Color.accentColor)
                     .controlSize(.mini)
                     .frame(width: 60)
-                    .transition(.opacity)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .offset(x: -8)),
+                        removal: .opacity.combined(with: .offset(x: -4))
+                    ))
                 }
             }
             .padding(.horizontal, LivelyBrand.Spacing.lg)
@@ -395,6 +398,7 @@ struct ScreenCardView: View {
                             .font(.system(size: 28))
                             .symbolEffect(.bounce, value: isTargeted.wrappedValue)
                             .foregroundStyle(isTargeted.wrappedValue ? LivelyBrand.primary : LivelyBrand.mutedForeground)
+                            .contentTransition(.symbolEffect(.replace))
                         
                         if isTargeted.wrappedValue {
                             Text("Drop Here")
@@ -436,7 +440,13 @@ struct ScreenCardView: View {
             )
         }
         .buttonStyle(.plain)
-        .scaleEffect(isTargeted.wrappedValue ? 0.98 : 1.0)
+        .scaleEffect(isTargeted.wrappedValue ? 1.03 : 1.0)
+        .animation(
+            reduceMotion ? nil : (isTargeted.wrappedValue
+                ? .spring(duration: 0.35, bounce: 0.35)
+                : .spring(duration: 0.2, bounce: 0)),
+            value: isTargeted.wrappedValue
+        )
         .accessibilityLabel(url == nil ? "\(title.isEmpty ? "Wallpaper" : title), choose video" : "\(title.isEmpty ? "Wallpaper" : title), \(url?.lastPathComponent ?? "video assigned")")
         .accessibilityHint("Drag and drop a video, or click to browse")
         .onDrop(of: [.fileURL], isTargeted: isTargeted) { providers in
