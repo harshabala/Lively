@@ -45,8 +45,8 @@ enum LivelyBrand {
     }
 
     enum Motion {
-        static let fast = Animation.spring(duration: 0.2)
-        static let normal = Animation.spring(duration: 0.3)
+        static let fast   = Animation.spring(duration: 0.2, bounce: 0)
+        static let normal = Animation.spring(duration: 0.3, bounce: 0)
     }
 
     private static func adaptive(light: String, dark: String) -> Color {
