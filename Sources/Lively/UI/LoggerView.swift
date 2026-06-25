@@ -18,9 +18,7 @@ public struct LoggerView: View {
                 Spacer()
 
                 Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        isExpanded.toggle()
-                    }
+                    isExpanded.toggle()
                 } label: {
                     HStack(spacing: 6) {
                         Text(isExpanded ? "Hide Logs" : "View Logs")
