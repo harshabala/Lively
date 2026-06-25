@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AVFoundation
 import UniformTypeIdentifiers
 
 private let supportedVideoTypes: [UTType] = [.mpeg4Movie, .quickTimeMovie, .movie]
@@ -445,39 +446,7 @@ struct ScreenCardView: View {
                 else { return }
 
                 Task { @MainActor in
-                    if isValidLivelyVideoFile(url) {
-                        // Dead file check
-                        // For dropped files from outside the app container, we need to check if they
-                        // actually exist and are reachable before bookmarking them
-                        var isReachable = false
-                        if url.startAccessingSecurityScopedResource() {
-                            isReachable = FileManager.default.fileExists(atPath: url.path)
-                            url.stopAccessingSecurityScopedResource()
-                        } else {
-                            isReachable = FileManager.default.fileExists(atPath: url.path)
-                        }
-                        
-                        if isReachable {
-                            errorMessage = nil
-                            onDrop(url)
-                        } else {
-                            errorMessage = "File not found or accessible."
-                            AccessibilityNotification.Announcement("File not found or accessible.").post()
-                            // Auto-dismiss after 3s
-                            Task {
-                                try? await Task.sleep(for: .seconds(3))
-                                await MainActor.run { errorMessage = nil }
-                            }
-                        }
-                    } else {
-                        errorMessage = "Unsupported format. Use .mp4, .mov, or .m4v"
-                        AccessibilityNotification.Announcement("Unsupported format.").post()
-                        // Auto-dismiss after 3s
-                        Task {
-                            try? await Task.sleep(for: .seconds(3))
-                            await MainActor.run { errorMessage = nil }
-                        }
-                    }
+                    await acceptURL(url, onAccept: onDrop)
                 }
             }
             return true
@@ -486,10 +455,56 @@ struct ScreenCardView: View {
 
     // MARK: - Interactions
 
-    private func openFilePicker(onPick: @escaping (URL) -> Void) {
-        // Activate the app so the panel appears in front
+    private func showError(_ message: String) {
+        errorMessage = message
+        AccessibilityNotification.Announcement(message).post()
+        errorClearTask?.cancel()
+        errorClearTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5))
+            if !Task.isCancelled { errorMessage = nil }
+        }
+    }
+
+    // Validates extension, reachability, and codec before accepting a URL.
+    // VP9 and AV1 are rejected — AVPlayer wallpaper sessions can't reliably decode them.
+    private func acceptURL(_ url: URL, onAccept: @escaping @MainActor (URL) -> Void) async {
+        guard isValidLivelyVideoFile(url) else {
+            showError("Unsupported format. Use .mp4, .mov, or .m4v")
+            return
+        }
+
+        let scopeGranted = url.startAccessingSecurityScopedResource()
+
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            if scopeGranted { url.stopAccessingSecurityScopedResource() }
+            showError("File not found or not accessible.")
+            return
+        }
+
+        let asset = AVURLAsset(url: url)
+        if let tracks = try? await asset.loadTracks(withMediaType: .video) {
+            for track in tracks {
+                if let descs = try? await track.load(.formatDescriptions) {
+                    for desc in descs {
+                        let codec = CMFormatDescriptionGetMediaSubType(desc)
+                        if codec == kCMVideoCodecType_VP9 || codec == kCMVideoCodecType_AV1 {
+                            if scopeGranted { url.stopAccessingSecurityScopedResource() }
+                            showError("VP9/AV1 codec not supported. Re-encode to H.264 or HEVC.")
+                            return
+                        }
+                    }
+                }
+            }
+        }
+
+        if scopeGranted { url.stopAccessingSecurityScopedResource() }
+        errorMessage = nil
+        onAccept(url)
+    }
+
+    private func openFilePicker(onPick: @escaping @MainActor (URL) -> Void) {
         NSApp.activate()
-        
+
         let panel = NSOpenPanel()
         panel.allowedContentTypes = supportedVideoTypes
         panel.allowsMultipleSelection = false
@@ -499,8 +514,8 @@ struct ScreenCardView: View {
 
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
-            if isValidLivelyVideoFile(url) {
-                onPick(url)
+            Task { @MainActor in
+                await self.acceptURL(url, onAccept: onPick)
             }
         }
     }

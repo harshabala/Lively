@@ -5,6 +5,46 @@ public enum LivelyTab: Hashable {
     case settings
 }
 
+// MARK: - Primary Tab Bar
+
+private struct PrimaryTabBar: View {
+    @Binding var selection: LivelyTab
+
+    var body: some View {
+        HStack(spacing: 2) {
+            tabButton("Displays", tab: .displays)
+            tabButton("Settings", tab: .settings)
+        }
+        .padding(3)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+    }
+
+    private func tabButton(_ label: String, tab: LivelyTab) -> some View {
+        Button {
+            selection = tab
+        } label: {
+            Text(label)
+                .font(.system(size: 12, weight: .semibold))
+                .hidden()
+                .overlay {
+                    Text(label)
+                        .font(.system(size: 12, weight: selection == tab ? .semibold : .regular))
+                        .foregroundStyle(selection == tab ? Color.primary : Color.secondary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 5)
+                .background {
+                    if selection == tab {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(.background)
+                            .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 public struct SettingsContainerView: View {
     @ObservedObject public var spaceMonitor: SpaceMonitor
     public let configStore: ConfigStore
@@ -21,12 +61,7 @@ public struct SettingsContainerView: View {
         VStack(spacing: 0) {
             // Custom Navigation Header
             HStack {
-                Picker("", selection: $selectedTab) {
-                    Text("Displays").tag(LivelyTab.displays)
-                    Text("Settings").tag(LivelyTab.settings)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 180)
+                PrimaryTabBar(selection: $selectedTab)
                 
                 Spacer()
                 
