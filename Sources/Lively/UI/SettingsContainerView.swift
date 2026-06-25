@@ -51,7 +51,8 @@ public struct SettingsContainerView: View {
     @EnvironmentObject var wallpaperController: WallpaperController
     
     @State private var selectedTab: LivelyTab = .displays
-    
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     public init(spaceMonitor: SpaceMonitor, configStore: ConfigStore) {
         self.spaceMonitor = spaceMonitor
         self.configStore = configStore
@@ -72,6 +73,7 @@ public struct SettingsContainerView: View {
                     }) {
                         Image(systemName: wallpaperController.isPaused ? "play.fill" : "pause.fill")
                             .font(.system(size: 11, weight: .semibold))
+                            .contentTransition(.symbolEffect(.replace))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(wallpaperController.isPaused ? "Resume Wallpapers" : "Pause Wallpapers")
@@ -105,11 +107,20 @@ public struct SettingsContainerView: View {
                 switch selectedTab {
                 case .displays:
                     DisplaysView(spaceMonitor: spaceMonitor, configStore: configStore)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .offset(y: 6)),
+                            removal: .opacity.combined(with: .offset(y: -4))
+                        ))
                 case .settings:
                     PreferencesView(configStore: configStore)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .offset(y: 6)),
+                            removal: .opacity.combined(with: .offset(y: -4))
+                        ))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: selectedTab)
         }
         .frame(width: 480, height: 560)
         .background(
