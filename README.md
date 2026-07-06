@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icon.png" alt="Lively app icon" width="128" height="128">
+</p>
+
 # Lively
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-teal.svg)](LICENSE)
