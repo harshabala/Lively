@@ -22,7 +22,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select Xcode 26.3 (Swift 6.2)
+      - name: Select Xcode 26.3 (Swift 6.x)
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: "26.3"
