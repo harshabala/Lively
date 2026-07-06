@@ -2,34 +2,184 @@
 
 **Video wallpapers for every Space on your Mac.**
 
-Lively lives in the menu bar and plays looping video on every display and Space — independently. Switch to a different Space and a different video can be playing there. No Dock icon, no app window cluttering your desktop. Just your wallpaper, doing its thing.
+Lively is a native macOS menu-bar utility that plays looping, hardware-accelerated video behind your desktop — independently on each display and each Space. Switch to your focus Space and one clip is playing; swipe to your music Space and another is already looping. No Dock icon, no browser wrapper, no cloud account. Just your wallpaper, quietly doing its job.
 
 ---
 
-## What makes it different
+## Overview
 
-Most "video wallpaper" apps on macOS are wrappers around a web renderer or an Electron shell. Lively is not. It is a native Swift app built entirely on Apple frameworks with **zero third-party dependencies**. Everything — video decoding, window management, animations, preferences — runs through the frameworks Apple ships with macOS.
+Most video-wallpaper apps on macOS are Electron shells or web renderers duct-taped to the desktop. Lively is different: a **100% native Swift app** built on Apple frameworks with **zero third-party dependencies**. Video decode, window layering, Space detection, preferences, and persistence all run through AVFoundation, AppKit, SwiftUI, and ServiceManagement.
 
-**Per-Space wallpapers.** Each macOS Space gets its own independently playing video. Assign a different clip to your focus Space, your chat Space, your music Space. They play simultaneously and independently without any coupling.
+| | |
+|---|---|
+| **Platform** | macOS 14.0 (Sonoma) or later |
+| **Distribution** | Build from source or package with `package.sh` |
+| **Privacy** | Fully offline — no analytics, telemetry, or network entitlement |
+| **Codecs** | H.264 and HEVC only (hardware-decoded) |
+| **License** | © 2026 Harsha Balakrishnan |
 
-**Hardware-accelerated 4K.** Lively uses AVFoundation's hardware decode pipeline. HEVC (H.265) and H.264 run on the dedicated hardware video engine — Apple Silicon handles a full 4K HEVC loop at nearly zero CPU cost.
+---
 
-**Codec validation before assignment.** Before a video becomes a wallpaper, Lively inspects its actual codec track using `CMFormatDescription`. VP9 and AV1 are rejected with a clear error message rather than silently producing a black screen. Only H.264 and HEVC are accepted — codecs that macOS can hardware-decode efficiently.
+## How it works
 
-**Security-scoped bookmark persistence.** Wallpaper assignments survive reboots. Lively stores security-scoped bookmarks (not raw paths) so it re-opens your video files across launches without ever asking for broad file-system access.
+Lively sits in the menu bar as a background (`accessory`) process. When you assign a video, it opens a special `WallpaperWindow` on each physical display, draws an `AVPlayerLayer` behind the desktop icons, and keeps playback in sync as you change Spaces or connect monitors.
 
-**Launch at Login via SMAppService.** No LaunchAgents plist, no daemon registration. Uses the modern `SMAppService` API introduced in macOS 13.
+```mermaid
+flowchart TB
+    subgraph MenuBar["Menu bar"]
+        StatusItem["Status item (play.tv)"]
+        Popover["Settings popover"]
+    end
 
-**Completely offline.** No analytics, no telemetry, no network entitlement whatsoever. There is nothing to phone home to.
+    subgraph Core["LivelyCore"]
+        SpaceMonitor["SpaceMonitor\n(display + Space detection)"]
+        ConfigStore["ConfigStore\n(assignments + bookmarks)"]
+        WallpaperController["WallpaperController\n(AVPlayer lifecycle)"]
+    end
 
-**Motion-designed UI.** The interface uses `matchedGeometryEffect` sliding pill navigation, asymmetric spring transitions between tabs, staggered card entrances on display detection, and `contentTransition(.symbolEffect(.replace))` icon cross-fades throughout. Every animation is gated on `@Environment(\.accessibilityReduceMotion)`.
+    subgraph Displays["Per physical display"]
+        Session1["WallpaperSession"]
+        Session2["WallpaperSession"]
+        Win1["WallpaperWindow\n(behind desktop)"]
+        Win2["WallpaperWindow"]
+        Player1["AVPlayer + AVPlayerLayer"]
+        Player2["AVPlayer + AVPlayerLayer"]
+    end
+
+    subgraph Storage["On disk"]
+        JSON["space configs JSON"]
+        Bookmarks["Security-scoped bookmarks"]
+    end
+
+    StatusItem --> Popover
+    Popover --> SpaceMonitor
+    Popover --> ConfigStore
+    ConfigStore --> JSON
+    ConfigStore --> Bookmarks
+    SpaceMonitor -->|"active Space changed"| WallpaperController
+    ConfigStore -->|"assignment updated"| WallpaperController
+    WallpaperController --> Session1
+    WallpaperController --> Session2
+    Session1 --> Win1 --> Player1
+    Session2 --> Win2 --> Player2
+    Bookmarks -->|"resolve on launch"| WallpaperController
+```
+
+### Per-Space assignments
+
+macOS Spaces are identified by a composite key: **display ID + desktop wallpaper URL**. That means the same physical monitor can have different Lively videos on different Spaces — and they play simultaneously without interfering with each other.
+
+### Persistence model
+
+When you pick a video, Lively stores a **security-scoped bookmark** (not a raw file path). On relaunch it re-opens only the files you explicitly chose — no broad filesystem access, no re-prompting every session.
+
+---
+
+## How to use
+
+### 1. Install and launch
+
+```bash
+# Build and run (development)
+swift run LivelyApp
+
+# Or package a signed .app bundle
+./package.sh
+open /private/tmp/LivelyOutput/Lively.app
+```
+
+After launch, look for the **play.tv** icon in the menu bar. Lively does not appear in the Dock.
+
+### 2. Assign a wallpaper
+
+1. Click the menu-bar icon to open **Settings**.
+2. On the **Displays** tab, find your monitor card.
+3. Choose a mode:
+   - **Wallpaper** — one video for the current Space.
+   - **Light & Dark** — separate videos for macOS light and dark appearance.
+4. **Drop** an `.mp4`, `.mov`, or `.m4v` onto the drop zone, or **click** to browse.
+5. Lively validates the codec (H.264 / HEVC only) before accepting the file.
+
+### 3. Adjust playback
+
+Each assigned display card exposes:
+
+- **Scale** — Fill (crop to screen) or Fit (letterbox).
+- **Mute / volume** — audio plays from the wallpaper layer (useful for ambient loops).
+- **Remove** — clears the assignment for that Space.
+
+Use the **pause/play** button in the settings header to pause all wallpapers globally.
+
+### 4. Preferences
+
+On the **Settings** tab:
+
+- **Launch at Login** — registers via `SMAppService` (macOS 13+).
+- **Reset All Data** — clears all assignments and preferences.
+- **Logs** — view and copy in-app logs for troubleshooting.
+- **About** — version, supported formats, release link.
+
+### 5. Switch Spaces
+
+Swipe between Spaces (or use Control+Arrow). Lively detects the active Space per display and swaps to the correct video automatically. Assignments you made on other Spaces resume when you return.
+
+---
+
+## Features
+
+- **Per-Space, per-display wallpapers** — independent playback on every monitor and Space
+- **Hardware-accelerated 4K** — H.264 and HEVC decoded on the dedicated video engine (near-zero CPU on Apple Silicon)
+- **Codec validation at assignment** — VP9, AV1, and other codecs are rejected with a clear error instead of a black screen
+- **Light / Dark appearance mode** — different videos for each macOS appearance on the same Space
+- **Security-scoped bookmarks** — assignments survive reboots without re-selecting files
+- **Launch at Login** — modern `SMAppService` registration, no LaunchAgents plist
+- **Menu-bar-first UX** — compact 480×560 settings panel; wallpaper stays the hero
+- **Fully offline** — no network entitlement, no analytics, no telemetry
+- **Accessible UI** — Reduce Motion support, VoiceOver labels, 32pt hit targets, error announcements
+- **In-app logging** — `os.Logger` wrapper with copy-to-clipboard viewer
+- **Native motion design** — pill tabs, staggered card entrance, symbol cross-fades (all gated on Reduce Motion)
+
+---
+
+## Limitations
+
+| Area | What Lively does *not* do (today) |
+|------|-----------------------------------|
+| **Codecs** | Only **H.264** and **HEVC**. VP9, AV1, ProRes, and others are rejected. Re-encode with ffmpeg if needed. |
+| **Containers** | `.mp4`, `.mov`, `.m4v` only. |
+| **Sandbox / App Store** | Runs **unsandboxed**. Drawing behind all windows and managing Spaces requires capabilities the App Sandbox does not currently allow. Mac App Store distribution would need a sandbox rethink. |
+| **Notarization** | `package.sh` performs ad-hoc signing for local use. Production distribution requires Apple Developer signing and notarization. |
+| **Single wallpaper per Space** | One video (or light/dark pair) per display+Space — no playlists, schedules, or random rotation. |
+| **No GIF / image wallpapers** | Video only. Static images are handled by macOS itself. |
+| **Audio** | Wallpaper audio plays from the desktop layer; macOS may mix it with other app audio. No per-app ducking. |
+| **Multi-user / iCloud sync** | Config is local to the machine. No sync across Macs. |
+| **Update checker** | No in-app auto-update. Check [GitHub Releases](https://github.com/harshabala/Lively/releases) manually. |
+| **Intel performance** | 4K HEVC depends on hardware decode (T1/T2 Macs and Apple Silicon). Older Intel GPUs may struggle with very high bitrates. |
+| **File size** | No hard cap — AVFoundation streams from disk — but extreme bitrates can stutter if SSD throughput is the bottleneck. |
+
+### Re-encoding unsupported videos
+
+```bash
+# Example: convert a VP9 download to HEVC
+F=$(find ~/Downloads -name "*.mp4" | head -1)
+ffmpeg -i "$F" -c:v libx265 -crf 24 -preset fast -an output_hevc.mp4
+```
+
+---
+
+## Supported formats
+
+| Codec | Containers | Notes |
+|-------|-----------|-------|
+| H.264 (AVC) | MP4, MOV, M4V | Hardware-decoded on all supported Macs |
+| HEVC (H.265) | MP4, MOV, M4V | Hardware-decoded on Apple Silicon and most T1/T2 Intel Macs |
 
 ---
 
 ## Requirements
 
 - macOS 14.0 (Sonoma) or later
-- Swift 6.2 or newer (Xcode Command Line Tools or full Xcode)
+- Swift 6.2+ (Xcode or Command Line Tools)
 - Apple Silicon or Intel Mac
 
 ---
@@ -45,116 +195,71 @@ swift build -c release
 
 # Run tests
 ./test.sh
-```
 
-> **Note:** Command Line Tools ships `Testing.framework` in a non-standard path. `test.sh` adds the required search and rpath flags. If you have a full Xcode installation, `swift test` also works.
-
-```bash
-# Run in debug mode directly
+# Run directly
 swift run LivelyApp
 ```
 
-## Packaging a signed `.app` bundle
+> **Note:** Command Line Tools ships `Testing.framework` in a non-standard path. `test.sh` adds the required search and rpath flags. Full Xcode also supports `swift test`.
+
+### Package a signed `.app` bundle
 
 ```bash
 ./package.sh
-```
-
-This script:
-- Builds a release binary with Swift Package Manager
-- Assembles `Lively.app` at `/private/tmp/LivelyOutput/Lively.app` (override with `LIVELY_OUTPUT_DIR=`)
-- Copies `AppIcon.icns` into `Contents/Resources/`
-- Generates `Info.plist` with the correct bundle identifier (`com.lively.app`)
-- Performs ad-hoc code signing with `entitlements.plist` so `SMAppService` works locally
-
-```bash
 open /private/tmp/LivelyOutput/Lively.app
 ```
 
----
-
-## Supported formats
-
-| Codec | Containers | Notes |
-|-------|-----------|-------|
-| H.264 (AVC) | MP4, MOV, M4V | Hardware-decoded on all supported Macs |
-| HEVC (H.265) | MP4, MOV, M4V | Hardware-decoded on Apple Silicon and most Intel Macs with T1/T2 chip |
-
-VP9 and AV1 are explicitly rejected at assignment time. If you have a VP9 video (common from YouTube downloads), re-encode to HEVC first:
-
-```bash
-# Find the file to avoid shell quoting issues with special characters
-F=$(find ~/path/to/video -name "*.mp4" | head -1)
-ffmpeg -i "$F" -c:v libx265 -crf 24 -preset fast -an output_hevc.mp4
-```
-
-No file size limit. AVFoundation streams video from disk rather than loading it into RAM, so multi-gigabyte 4K files play fine. The bottleneck is your SSD's read speed, not memory.
+`package.sh` builds release, assembles `Lively.app` (default: `/private/tmp/LivelyOutput/`), copies `AppIcon.icns`, writes `Info.plist`, and ad-hoc signs with `entitlements.plist` so Launch at Login works locally. Override output with `LIVELY_OUTPUT_DIR=`.
 
 ---
 
-## Project layout
+## Architecture
 
 ```
 Sources/
-  Lively/               — LivelyCore library (testable)
+  Lively/                    — LivelyCore library (testable)
     Core/
-      ConfigStore           — Preferences + security-scoped bookmark management
-      DynamicWallpaper      — Per-Space wallpaper assignment model
-      SpaceMonitor          — Display and active Space detection via CGS APIs
-      WallpaperController   — AVPlayer lifecycle, pause/resume, Space tracking
-      WallpaperWindow       — NSWindow subclass that draws behind the desktop layer
+      WallpaperController    — AVPlayer lifecycle, pause/resume, Space sync
+      WallpaperWindow        — NSWindow behind the desktop layer
+    Logic/
+      ConfigStore            — Preferences + security-scoped bookmarks
+      DynamicWallpaper       — Per-Space assignment model
+      SpaceMonitor           — Display and active Space detection
+      LivelyLogger           — os.Logger wrapper + LogStore
     UI/
-      SettingsContainerView — Main panel with primary tab navigation
-      DisplaysView          — Per-display Space card list with staggered entrance
-      ScreenCardView        — Drop zone, mode picker, video thumbnail, volume slider
-      AboutView             — Version info, codec support, update check
-      LoggerView            — In-app log viewer for debugging
-      VideoThumbnailView    — Async thumbnail generation with NSCache
-      LivelyBrand           — Design tokens (colors, spacing, spring animations, type)
-      GlassEffect           — NSVisualEffectView bridged to SwiftUI
-  LivelyApp/            — Executable entry point
-    main.swift          — AppDelegate, menu bar status item, SMAppService wiring
+      SettingsContainerView  — Main panel with tab navigation
+      DisplaysView           — Per-display Space cards
+      ScreenCardView         — Drop zone, mode picker, thumbnail, volume
+      PreferencesView        — Launch at Login, reset, logs, about
+      LivelyBrand            — Design tokens (Mist Reef palette)
+  LivelyApp/
+    main.swift               — AppDelegate, menu bar, popover
 Tests/
-  LivelyTests/          — Unit tests for core logic and codec validation
+  LivelyTests/               — ConfigStore, codec validation tests
 ```
+
+Design docs: [`brand.md`](brand.md) · [`PRODUCT.md`](PRODUCT.md) · [`DESIGN.md`](DESIGN.md)
 
 ---
 
 ## Entitlements and sandboxing
 
-Lively runs **unsandboxed**. Drawing video behind all other windows and managing Spaces requires capabilities the macOS App Sandbox does not currently permit.
+Lively runs **unsandboxed**. Drawing video behind all windows requires capabilities the macOS App Sandbox does not currently permit.
 
 | Entitlement | Purpose |
 |-------------|---------|
 | `com.apple.security.files.user-selected.read-only` | Read user-chosen video files |
-| `com.apple.security.files.bookmarks.app-scope` | Re-open video files after relaunch without re-prompting |
+| `com.apple.security.files.bookmarks.app-scope` | Re-open videos after relaunch |
 
 No network, camera, microphone, or location entitlement is present.
-
-If you plan to distribute via the Mac App Store, you will need to enable sandboxing and re-verify the bookmark-based file access pattern works under it.
 
 ---
 
 ## Logging and privacy
 
-Logging uses `os.Logger` via a thin `LivelyLogger` wrapper, organised by subsystem (`com.lively.app`) and component. Logs are visible in Console.app filtered by subsystem. File paths in logs use `lastPathComponent` to avoid exposing full filesystem paths.
+Logging uses `os.Logger` via `LivelyLogger`, organised by subsystem (`com.lively.app`). View logs in-app (Settings → Logs) or in Console.app filtered by subsystem. File paths in logs use `lastPathComponent` only.
 
-The app performs no network requests and collects no user data.
-
----
-
-## Attributions
-
-Lively uses **no third-party libraries**. Every line of code is built on Apple-provided frameworks:
-
-| Framework | Used for |
-|-----------|---------|
-| AVFoundation | Video playback, codec inspection (`CMFormatDescription`) |
-| CoreGraphics / CGS | Space and display enumeration |
-| SwiftUI | All UI |
-| AppKit | `NSWindow`, `NSVisualEffectView`, `NSStatusItem` |
-| ServiceManagement | `SMAppService` for Launch at Login |
-| os.Logger | Structured logging |
+The app performs **no network requests** and collects **no user data**.
 
 ---
 
@@ -166,11 +271,27 @@ open /private/tmp/LivelyOutput/Lively.app
 ```
 
 Manual checks:
+
 - Menu bar icon appears
 - Settings opens from the menu bar
 - Dropping or selecting `.mp4`, `.mov`, or `.m4v` assigns a wallpaper
-- Pause/Resume updates playback state and menu label
-- Quit and relaunch — persisted wallpaper assignments reload correctly
+- Pause/Resume updates playback state
+- Quit and relaunch — persisted assignments reload correctly
+- Switch Spaces — correct video resumes per Space
+
+---
+
+## Attributions
+
+Lively uses **no third-party libraries**. Built entirely on Apple frameworks:
+
+| Framework | Used for |
+|-----------|---------|
+| AVFoundation | Playback, codec inspection (`CMFormatDescription`) |
+| CoreGraphics | Display enumeration |
+| SwiftUI / AppKit | UI, `NSWindow`, `NSStatusItem` |
+| ServiceManagement | `SMAppService` Launch at Login |
+| os.Logger | Structured logging |
 
 ---
 
@@ -178,9 +299,9 @@ Manual checks:
 
 Built by **[@harshabala](https://github.com/harshabala)**.
 
-Designed, architected, and shipped using [Claude Code](https://claude.ai/code) — motion design audits, multi-agent implementation sprints, code reviews, and regression testing were all coordinated through AI coding agent sessions. The codec validation pipeline, security-scoped bookmark fix, and the full animation layer were each driven by dedicated subagent workflows. This is what AI-native development looks like in 2026.
+Designed and shipped with AI-assisted development workflows — multi-agent code review, security audit, motion design, and UI polish passes coordinated through Claude Code and Impeccable.
 
-Questions, ideas, or just want to say hi → **[github.com/harshabala](https://github.com/harshabala)**
+Questions or ideas → **[github.com/harshabala/Lively/issues](https://github.com/harshabala/Lively/issues)**
 
 ---
 
