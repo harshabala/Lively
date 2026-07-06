@@ -461,7 +461,9 @@ struct ScreenCardView: View {
                     let url = URL(dataRepresentation: data, relativeTo: nil)
                 else { return }
 
-                handleURLSelection(url, isValidating: isValidating, onAccept: onDrop)
+                Task { @MainActor in
+                    handleURLSelection(url, isValidating: isValidating, onAccept: onDrop)
+                }
             }
             return true
         }
@@ -479,7 +481,6 @@ struct ScreenCardView: View {
         }
     }
 
-    @MainActor
     private func handleURLSelection(
         _ url: URL,
         isValidating: Binding<Bool>,
