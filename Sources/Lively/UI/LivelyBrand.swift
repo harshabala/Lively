@@ -11,7 +11,9 @@ enum LivelyBrand {
     static let mutedForeground = adaptive(light: "#516970", dark: "#8CAAB1")
     static let border = adaptive(light: "#C8DADA", dark: "#2B4952")
     static let accent = adaptive(light: "#E3F2F1", dark: "#12313A")
-    static let destructive = Color.red
+    static let destructive = adaptive(light: "#C42B2B", dark: "#F87171")
+    static let onDestructive = adaptive(light: "#FFFFFF", dark: "#FFFFFF")
+    static let logBackground = adaptive(light: "#EFF8F7", dark: "#081A22")
 
     static var backgroundGradient: LinearGradient {
         LinearGradient(

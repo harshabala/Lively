@@ -17,7 +17,12 @@ struct ScreenCardView: View {
     @State private var isTargetedLight = false
     @State private var isTargetedDark = false
     @State private var showRemoveConfirm = false
-    @State private var isValidating = false
+    @State private var isValidatingMain = false
+    @State private var isValidatingLight = false
+    @State private var isValidatingDark = false
+    @State private var resolvedStaticURL: URL?
+    @State private var resolvedLightURL: URL?
+    @State private var resolvedDarkURL: URL?
 
     @EnvironmentObject var wallpaperController: WallpaperController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -78,10 +83,9 @@ struct ScreenCardView: View {
                 dropZone(
                     title: currentWallpaper.mode == .appearance ? "Light mode" : "",
                     icon: currentWallpaper.mode == .appearance ? "sun.max.fill" : "film",
-                    url: currentWallpaper.mode == .appearance
-                        ? configStore.resolveBookmark(for: space.spaceKey, bookmarkKey: "light", fallbackURL: currentWallpaper.lightURL)
-                        : configStore.resolveBookmark(for: space.spaceKey, bookmarkKey: "static", fallbackURL: currentWallpaper.staticURL),
+                    url: currentWallpaper.mode == .appearance ? resolvedLightURL : resolvedStaticURL,
                     isTargeted: currentWallpaper.mode == .appearance ? $isTargetedLight : $isTargetedMain,
+                    isValidating: currentWallpaper.mode == .appearance ? $isValidatingLight : $isValidatingMain,
                     onDrop: { url in
                         var updated = currentWallpaper
                         if updated.mode == .appearance {
@@ -97,8 +101,9 @@ struct ScreenCardView: View {
                     dropZone(
                         title: "Dark mode",
                         icon: "moon.stars.fill",
-                        url: configStore.resolveBookmark(for: space.spaceKey, bookmarkKey: "dark", fallbackURL: currentWallpaper.darkURL),
+                        url: resolvedDarkURL,
                         isTargeted: $isTargetedDark,
+                        isValidating: $isValidatingDark,
                         onDrop: { url in
                             var updated = currentWallpaper
                             updated.darkURL = url
@@ -134,7 +139,7 @@ struct ScreenCardView: View {
             if let error = errorMessage {
                 Text(error)
                     .font(LivelyBrand.Typography.footnote.weight(.medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(LivelyBrand.onDestructive)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(LivelyBrand.destructive.opacity(0.92))
@@ -166,6 +171,7 @@ struct ScreenCardView: View {
         }
         .onAppear {
             currentConfig = configStore.configs[space.spaceKey]
+            refreshResolvedURLs()
         }
         .onReceive(configStore.$configs) { newConfigs in
             let newConfig = newConfigs[space.spaceKey]
@@ -173,6 +179,7 @@ struct ScreenCardView: View {
                 || (currentConfig == nil && newConfig != nil)
                 || (currentConfig != nil && newConfig == nil) {
                 currentConfig = newConfig
+                refreshResolvedURLs()
             }
         }
     }
@@ -266,16 +273,22 @@ struct ScreenCardView: View {
                         volume: newValue ? 0 : currentWallpaper.volume
                     )
                 } label: {
-                    Image(systemName: currentWallpaper.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                        .font(LivelyBrand.Typography.footnote)
-                        .foregroundStyle(currentWallpaper.isMuted ? LivelyBrand.mutedForeground : LivelyBrand.primary)
-                        .frame(minWidth: 32, minHeight: 32)
-                        .contentShape(Circle())
-                        .background(
-                            Circle()
-                                .fill(currentWallpaper.isMuted ? Color.clear : LivelyBrand.primary.opacity(0.15))
-                        )
-                        .contentTransition(.symbolEffect(.replace))
+                    Group {
+                        if !reduceMotion {
+                            Image(systemName: currentWallpaper.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                                .contentTransition(.symbolEffect(.replace))
+                        } else {
+                            Image(systemName: currentWallpaper.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                        }
+                    }
+                    .font(LivelyBrand.Typography.footnote)
+                    .foregroundStyle(currentWallpaper.isMuted ? LivelyBrand.mutedForeground : LivelyBrand.primary)
+                    .frame(minWidth: 32, minHeight: 32)
+                    .contentShape(Circle())
+                    .background(
+                        Circle()
+                            .fill(currentWallpaper.isMuted ? Color.clear : LivelyBrand.primary.opacity(0.15))
+                    )
                 }
                 .buttonStyle(PressScaleButtonStyle())
                 .accessibilityLabel(currentWallpaper.isMuted ? "Unmute" : "Mute")
@@ -321,18 +334,38 @@ struct ScreenCardView: View {
 
     // MARK: Drop Zone
 
+    private func refreshResolvedURLs() {
+        let wallpaper = currentWallpaper
+        resolvedStaticURL = configStore.resolveBookmark(
+            for: space.spaceKey,
+            bookmarkKey: "static",
+            fallbackURL: wallpaper.staticURL
+        )
+        resolvedLightURL = configStore.resolveBookmark(
+            for: space.spaceKey,
+            bookmarkKey: "light",
+            fallbackURL: wallpaper.lightURL
+        )
+        resolvedDarkURL = configStore.resolveBookmark(
+            for: space.spaceKey,
+            bookmarkKey: "dark",
+            fallbackURL: wallpaper.darkURL
+        )
+    }
+
     private func dropZone(
         title: String,
         icon: String,
         url: URL?,
         isTargeted: Binding<Bool>,
+        isValidating: Binding<Bool>,
         onDrop: @escaping @MainActor (URL) -> Void
     ) -> some View {
         Button {
-            openFilePicker(onPick: onDrop)
+            openFilePicker(isValidating: isValidating, onPick: onDrop)
         } label: {
             VStack(spacing: 8) {
-                if isValidating {
+                if isValidating.wrappedValue {
                     ProgressView()
                         .controlSize(.small)
                         .frame(maxWidth: .infinity, minHeight: 80)
@@ -362,13 +395,13 @@ struct ScreenCardView: View {
                             if !reduceMotion {
                                 Image(systemName: isTargeted.wrappedValue ? "arrow.down.circle.fill" : icon)
                                     .symbolEffect(.pulse, value: isTargeted.wrappedValue)
+                                    .contentTransition(.symbolEffect(.replace))
                             } else {
                                 Image(systemName: isTargeted.wrappedValue ? "arrow.down.circle.fill" : icon)
                             }
                         }
                         .font(.system(size: 28))
                         .foregroundStyle(isTargeted.wrappedValue ? LivelyBrand.primary : LivelyBrand.mutedForeground)
-                        .contentTransition(.symbolEffect(.replace))
 
                         if isTargeted.wrappedValue {
                             Text("Drop here")
@@ -426,7 +459,7 @@ struct ScreenCardView: View {
                 else { return }
 
                 Task { @MainActor in
-                    await acceptURL(url, onAccept: onDrop)
+                    await acceptURL(url, isValidating: isValidating, onAccept: onDrop)
                 }
             }
             return true
@@ -445,14 +478,18 @@ struct ScreenCardView: View {
         }
     }
 
-    private func acceptURL(_ url: URL, onAccept: @escaping @MainActor (URL) -> Void) async {
+    private func acceptURL(
+        _ url: URL,
+        isValidating: Binding<Bool>,
+        onAccept: @escaping @MainActor (URL) -> Void
+    ) async {
         guard isValidLivelyVideoFile(url) else {
             showError("Unsupported format. Use .mp4, .mov, or .m4v")
             return
         }
 
-        isValidating = true
-        defer { isValidating = false }
+        isValidating.wrappedValue = true
+        defer { isValidating.wrappedValue = false }
 
         let scopeGranted = url.startAccessingSecurityScopedResource()
 
@@ -495,7 +532,10 @@ struct ScreenCardView: View {
         if scopeGranted { url.stopAccessingSecurityScopedResource() }
     }
 
-    private func openFilePicker(onPick: @escaping @MainActor (URL) -> Void) {
+    private func openFilePicker(
+        isValidating: Binding<Bool>,
+        onPick: @escaping @MainActor (URL) -> Void
+    ) {
         NSApp.activate()
 
         let panel = NSOpenPanel()
@@ -508,7 +548,7 @@ struct ScreenCardView: View {
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             Task { @MainActor in
-                await self.acceptURL(url, onAccept: onPick)
+                await self.acceptURL(url, isValidating: isValidating, onAccept: onPick)
             }
         }
     }

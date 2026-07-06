@@ -28,8 +28,8 @@ struct PillTabBar<Selection: Hashable>: View {
             Text(label)
                 .font(LivelyBrand.Typography.caption.weight(isSelected ? .semibold : .regular))
                 .foregroundStyle(isSelected ? LivelyBrand.foreground : LivelyBrand.mutedForeground)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.horizontal, LivelyBrand.Spacing.md)
+                .padding(.vertical, LivelyBrand.Spacing.sm)
                 .frame(minHeight: 32)
                 .background {
                     if isSelected {

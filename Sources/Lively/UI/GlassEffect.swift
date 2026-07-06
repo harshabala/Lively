@@ -77,7 +77,7 @@ struct GlassButtonStyle: ButtonStyle {
                     if let tint = tint {
                         tint.opacity(configuration.isPressed ? 0.26 : isProminent ? 0.92 : 0.14)
                     } else {
-                        Color.white.opacity(configuration.isPressed ? 0.1 : 0.0)
+                        LivelyBrand.foreground.opacity(configuration.isPressed ? 0.1 : 0.0)
                     }
                 }
                 .cornerRadius(8)

@@ -35,6 +35,7 @@ public struct ScreenSpace: Equatable, Identifiable {
 public class SpaceMonitor: ObservableObject {
 
     @Published public private(set) var screenSpaces: [ScreenSpace] = []
+    @Published public private(set) var isRefreshing = false
 
     private var cancellables = Set<AnyCancellable>()
     private var spaceChangeTask: Task<Void, Never>?
@@ -59,6 +60,7 @@ public class SpaceMonitor: ObservableObject {
 
     /// Force a refresh — used by WallpaperController when configs change.
     public func refresh() {
+        isRefreshing = true
         screenSpaces = NSScreen.screens.map { screen in
             ScreenSpace(
                 id: Self.displayID(for: screen),
@@ -67,6 +69,7 @@ public class SpaceMonitor: ObservableObject {
                 displayName: screen.localizedName
             )
         }
+        isRefreshing = false
     }
 
     // MARK: - Private
@@ -76,9 +79,13 @@ public class SpaceMonitor: ObservableObject {
         let previousURLs = Dictionary(
             uniqueKeysWithValues: screenSpaces.map { ($0.id, $0.desktopImageURL) }
         )
+        isRefreshing = true
         spaceChangeTask = Task {
             for _ in 0..<10 {
-                if Task.isCancelled { return }
+                if Task.isCancelled {
+                    isRefreshing = false
+                    return
+                }
                 try? await Task.sleep(for: .milliseconds(50))
                 let current = NSScreen.screens.map { screen -> (String, URL?) in
                     (Self.displayID(for: screen), NSWorkspace.shared.desktopImageURL(for: screen))
@@ -88,9 +95,11 @@ public class SpaceMonitor: ObservableObject {
                 }
                 if changed || previousURLs.isEmpty { break }
             }
-            if !Task.isCancelled {
-                refresh()
+            guard !Task.isCancelled else {
+                isRefreshing = false
+                return
             }
+            refresh()
         }
     }
 

@@ -31,17 +31,13 @@ public struct SettingsContainerView: View {
                 Button(action: {
                     wallpaperController.togglePause()
                 }) {
-                    Image(systemName: wallpaperController.isPaused ? "play.fill" : "pause.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .frame(minWidth: 32, minHeight: 32)
-                        .contentShape(Rectangle())
-                        .contentTransition(.symbolEffect(.replace))
+                    pauseButtonLabel
                 }
                 .buttonStyle(PressScaleButtonStyle())
                 .accessibilityLabel(wallpaperController.isPaused ? "Resume wallpapers" : "Pause wallpapers")
                 .help(wallpaperController.isPaused ? "Resume wallpapers" : "Pause wallpapers")
-                .padding(.horizontal, 6)
-                .padding(.vertical, 4)
+                .padding(.horizontal, LivelyBrand.Spacing.sm)
+                .padding(.vertical, LivelyBrand.Spacing.xs)
                 .background(Capsule().fill(LivelyBrand.mutedForeground.opacity(0.12)))
             }
             .padding(.horizontal, LivelyBrand.Spacing.xl)
@@ -82,5 +78,19 @@ public struct SettingsContainerView: View {
                     .ignoresSafeArea()
             }
         )
+    }
+
+    @ViewBuilder
+    private var pauseButtonLabel: some View {
+        let image = Image(systemName: wallpaperController.isPaused ? "play.fill" : "pause.fill")
+            .font(.system(size: 11, weight: .semibold))
+            .frame(minWidth: 32, minHeight: 32)
+            .contentShape(Rectangle())
+
+        if reduceMotion {
+            image
+        } else {
+            image.contentTransition(.symbolEffect(.replace))
+        }
     }
 }

@@ -23,12 +23,20 @@ public struct LoggerView: View {
                     HStack(spacing: 6) {
                         Text(isExpanded ? "Hide Logs" : "View Logs")
                             .font(LivelyBrand.Typography.caption)
-                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 10, weight: .bold))
-                            .contentTransition(.symbolEffect(.replace))
+                        Group {
+                            if !reduceMotion {
+                                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .contentTransition(.symbolEffect(.replace))
+                            } else {
+                                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 10, weight: .bold))
+                            }
+                        }
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
+                    .frame(minWidth: 32, minHeight: 32)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(PressScaleButtonStyle())
@@ -55,7 +63,7 @@ public struct LoggerView: View {
                             .padding(12)
                         }
                         .frame(height: 150)
-                        .background(Color.black.opacity(0.03))
+                        .background(LivelyBrand.logBackground)
                         .overlay(
                             RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
                                 .strokeBorder(LivelyBrand.border.opacity(0.2))
@@ -106,6 +114,7 @@ public struct LoggerView: View {
                             .foregroundStyle(isCopied ? LivelyBrand.primary : LivelyBrand.foreground)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
+                            .frame(minWidth: 32, minHeight: 32)
                         }
                         .buttonStyle(PressScaleButtonStyle())
                         .background(

@@ -29,8 +29,11 @@ public struct DisplaysView: View {
         VStack(alignment: .leading, spacing: LivelyBrand.Spacing.md) {
             sectionLabel("Displays", icon: "display.2")
 
-            if spaceMonitor.screenSpaces.isEmpty {
+            if spaceMonitor.isRefreshing && spaceMonitor.screenSpaces.isEmpty {
                 detectingView
+                    .transition(.opacity.combined(with: .offset(y: 8)))
+            } else if spaceMonitor.screenSpaces.isEmpty {
+                emptyDisplaysView
                     .transition(.opacity.combined(with: .offset(y: 8)))
             } else {
                 VStack(spacing: LivelyBrand.Spacing.md) {
@@ -53,6 +56,30 @@ public struct DisplaysView: View {
             }
         }
         .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: spaceMonitor.screenSpaces.isEmpty)
+        .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: spaceMonitor.isRefreshing)
+    }
+
+    private var emptyDisplaysView: some View {
+        VStack(alignment: .leading, spacing: LivelyBrand.Spacing.sm) {
+            Text("No displays detected")
+                .font(LivelyBrand.Typography.body.weight(.semibold))
+                .foregroundStyle(LivelyBrand.foreground)
+            Text("Connect a monitor or check that Screen Recording permission is enabled for Lively in System Settings.")
+                .font(LivelyBrand.Typography.caption)
+                .foregroundStyle(LivelyBrand.mutedForeground)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(LivelyBrand.Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: LivelyBrand.Radius.lg)
+                .fill(LivelyBrand.card.opacity(0.88))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: LivelyBrand.Radius.lg)
+                .strokeBorder(LivelyBrand.border.opacity(0.42))
+        )
+        .accessibilityElement(children: .combine)
     }
 
     private var detectingView: some View {

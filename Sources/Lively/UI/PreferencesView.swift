@@ -50,6 +50,8 @@ public struct PreferencesView: View {
                                 .toggleStyle(.switch)
                                 .tint(LivelyBrand.primary)
                                 .labelsHidden()
+                                .accessibilityLabel("Launch at Login")
+                                .accessibilityValue(launchAtLoginEnabled ? "On" : "Off")
                         }
                         if let launchAtLoginError {
                             Text(launchAtLoginError)
@@ -74,6 +76,7 @@ public struct PreferencesView: View {
                                 .font(LivelyBrand.Typography.caption)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
+                                .frame(minWidth: 32, minHeight: 32)
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(LivelyBrand.destructive)
@@ -112,17 +115,29 @@ public struct PreferencesView: View {
         .scrollIndicators(.hidden)
         .foregroundStyle(LivelyBrand.foreground)
         .onReceive(configStore.errors) { error in
+            let message: String
             switch error {
             case .persistFailed:
-                configErrorMessage = "Could not save settings. Check disk space and try again."
+                message = "Could not save settings. Check disk space and try again."
             case .loadFailed:
-                configErrorMessage = "Could not load saved settings. Starting fresh."
+                message = "Could not load saved settings. Starting fresh."
             case .bookmarkRefreshFailed, .bookmarkCreationFailed:
-                configErrorMessage = "Could not access a video file. Re-select it in Displays."
+                message = "Could not access a video file. Re-select it in Displays."
             case .directoryCreationFailed:
-                configErrorMessage = "Could not create the Lively data folder."
+                message = "Could not create the Lively data folder."
+            }
+            configErrorMessage = message
+            AccessibilityNotification.Announcement(message).post()
+        }
+        .onChange(of: launchAtLoginError) { _, newValue in
+            if let newValue {
+                AccessibilityNotification.Announcement(newValue).post()
             }
         }
+    }
+
+    private var launchAtLoginEnabled: Bool {
+        SMAppService.mainApp.status == .enabled
     }
 
     private func settingsRow<Content: View>(
