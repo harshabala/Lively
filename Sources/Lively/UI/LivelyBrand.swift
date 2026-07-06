@@ -44,9 +44,19 @@ enum LivelyBrand {
         static let full: CGFloat = 9999
     }
 
+    enum Typography {
+        static let title = Font.system(size: 18, weight: .semibold)
+        static let section = Font.system(size: 13, weight: .semibold)
+        static let body = Font.system(size: 13, weight: .regular)
+        static let caption = Font.system(size: 12, weight: .medium)
+        static let footnote = Font.system(size: 11, weight: .regular)
+        static let mono = Font.system(size: 12, weight: .medium, design: .monospaced)
+    }
+
     enum Motion {
-        static let fast   = Animation.spring(duration: 0.2, bounce: 0)
-        static let normal = Animation.spring(duration: 0.3, bounce: 0)
+        static let fast       = Animation.spring(duration: 0.2, bounce: 0)
+        static let normal     = Animation.spring(duration: 0.3, bounce: 0)
+        static let dropTarget = Animation.spring(duration: 0.2, bounce: 0)
     }
 
     private static func adaptive(light: String, dark: String) -> Color {

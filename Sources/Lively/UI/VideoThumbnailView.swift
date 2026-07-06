@@ -53,14 +53,13 @@ struct VideoThumbnailView: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: 90)
                     .clipped()
-                    .cornerRadius(6)
+                    .clipShape(.rect(cornerRadius: LivelyBrand.Radius.sm))
                     .transition(.asymmetric(
                         insertion: .opacity.combined(with: .offset(y: 4)),
                         removal: .opacity
                     ))
             } else if isLoading {
-                // Loading state
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
                     .fill(LivelyBrand.accent.opacity(0.72))
                     .frame(maxWidth: .infinity)
                     .frame(height: 90)
@@ -68,9 +67,9 @@ struct VideoThumbnailView: View {
                         ProgressView()
                             .scaleEffect(0.6)
                     }
+                    .transition(.opacity)
             } else {
-                // Failed to generate
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
                     .fill(LivelyBrand.accent.opacity(0.72))
                     .frame(maxWidth: .infinity)
                     .frame(height: 90)
@@ -80,14 +79,15 @@ struct VideoThumbnailView: View {
                                 .font(.system(size: 18))
                                 .foregroundStyle(LivelyBrand.mutedForeground)
                             Text("No preview")
-                                .font(.system(size: 10))
+                                .font(LivelyBrand.Typography.footnote)
                                 .foregroundStyle(LivelyBrand.mutedForeground)
                         }
                     }
+                    .transition(.opacity)
             }
         }
-        .animation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.0), value: thumbnail != nil)
-        .accessibilityHidden(true)
+        .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: thumbnail != nil)
+        .animation(reduceMotion ? nil : LivelyBrand.Motion.fast, value: isLoading)
         .task(id: url) {
             isLoading = true
             thumbnail = await generateThumbnail(for: url)

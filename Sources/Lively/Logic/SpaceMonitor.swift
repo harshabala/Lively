@@ -37,6 +37,7 @@ public class SpaceMonitor: ObservableObject {
     @Published public private(set) var screenSpaces: [ScreenSpace] = []
 
     private var cancellables = Set<AnyCancellable>()
+    private var spaceChangeTask: Task<Void, Never>?
 
     public init() {
         refresh()
@@ -71,25 +72,25 @@ public class SpaceMonitor: ObservableObject {
     // MARK: - Private
 
     private func handleSpaceChange() {
-        // macOS takes a variable amount of time to propagate the new desktopImageURL
-        // after a Space switch. Poll every 50ms up to 500ms, stopping early once
-        // the URL actually changes (or if no previous state exists).
+        spaceChangeTask?.cancel()
         let previousURLs = Dictionary(
             uniqueKeysWithValues: screenSpaces.map { ($0.id, $0.desktopImageURL) }
         )
-        Task {
-            for _ in 0..<10 {  // 10 × 50ms = 500ms max
+        spaceChangeTask = Task {
+            for _ in 0..<10 {
+                if Task.isCancelled { return }
                 try? await Task.sleep(for: .milliseconds(50))
-                let current = NSScreen.screens.compactMap { screen -> (String, URL?)? in
-                    let id = Self.displayID(for: screen)
-                    return (id, NSWorkspace.shared.desktopImageURL(for: screen))
+                let current = NSScreen.screens.map { screen -> (String, URL?) in
+                    (Self.displayID(for: screen), NSWorkspace.shared.desktopImageURL(for: screen))
                 }
                 let changed = current.contains { id, url in
                     previousURLs[id] != url
                 }
                 if changed || previousURLs.isEmpty { break }
             }
-            refresh()
+            if !Task.isCancelled {
+                refresh()
+            }
         }
     }
 

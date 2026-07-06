@@ -138,6 +138,12 @@ private final class BookmarkManager {
     }
 
     func urlForSpace(_ space: ScreenSpace, appearance: NSAppearance?) -> URL? {
+        // Release scopes for other Spaces on the same display before starting a new one.
+        let displayPrefix = "\(space.id):"
+        for key in activeScopes.keys where key.hasPrefix(displayPrefix) && key != space.spaceKey {
+            stopScope(for: key)
+        }
+
         guard let url = configStore.resolvedURL(for: space.spaceKey, appearance: appearance) else {
             stopScope(for: space.spaceKey)
             return nil
@@ -153,7 +159,8 @@ private final class BookmarkManager {
         }
     }
 
-    func stopScopes(withPrefix prefix: String) {
+    func stopScopes(withDisplayID displayID: String) {
+        let prefix = "\(displayID):"
         for key in activeScopes.keys where key.hasPrefix(prefix) {
             stopScope(for: key)
         }
@@ -212,7 +219,7 @@ private final class WallpaperSessionManager {
         for id in sessions.keys where !liveDisplayIDs.contains(id) {
             sessions[id]?.hide()
             sessions.removeValue(forKey: id)
-            bookmarkManager.stopScopes(withPrefix: id)
+            bookmarkManager.stopScopes(withDisplayID: id)
         }
 
         // While paused, skip playback updates; togglePause() will re-sync on resume.
@@ -305,7 +312,10 @@ public final class WallpaperController: ObservableObject {
     private func bind() {
         spaceMonitor.$screenSpaces
             .sink { [weak self] spaces in
-                self?.synchronize(to: spaces)
+                guard let self else { return }
+                let activeKeys = Set(spaces.map(\.spaceKey))
+                configStore.pruneOrphanedConfigs(activeSpaceKeys: activeKeys)
+                synchronize(to: spaces)
             }
             .store(in: &cancellables)
 

@@ -5,49 +5,6 @@ public enum LivelyTab: Hashable {
     case settings
 }
 
-// MARK: - Primary Tab Bar
-
-private struct PrimaryTabBar: View {
-    @Binding var selection: LivelyTab
-    @Namespace private var tabIndicator
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        HStack(spacing: 2) {
-            tabButton("Displays", tab: .displays)
-            tabButton("Settings", tab: .settings)
-        }
-        .padding(3)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
-    }
-
-    private func tabButton(_ label: String, tab: LivelyTab) -> some View {
-        Button {
-            withAnimation(reduceMotion ? nil : LivelyBrand.Motion.fast) { selection = tab }
-        } label: {
-            Text(label)
-                .font(.system(size: 12, weight: .semibold))
-                .hidden()
-                .overlay {
-                    Text(label)
-                        .font(.system(size: 12, weight: selection == tab ? .semibold : .regular))
-                        .foregroundStyle(selection == tab ? Color.primary : Color.secondary)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 5)
-                .background {
-                    if selection == tab {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(.background)
-                            .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
-                            .matchedGeometryEffect(id: "pill", in: tabIndicator)
-                    }
-                }
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 public struct SettingsContainerView: View {
     @ObservedObject public var spaceMonitor: SpaceMonitor
     public let configStore: ConfigStore
@@ -63,40 +20,29 @@ public struct SettingsContainerView: View {
     
     public var body: some View {
         VStack(spacing: 0) {
-            // Custom Navigation Header
             HStack {
-                PrimaryTabBar(selection: $selectedTab)
+                PillTabBar(
+                    tabs: [("Displays", .displays), ("Settings", .settings)],
+                    selection: $selectedTab
+                )
                 
                 Spacer()
                 
-                // Action Chip
-                HStack(spacing: 12) {
-                    Button(action: {
-                        wallpaperController.togglePause()
-                    }) {
-                        Image(systemName: wallpaperController.isPaused ? "play.fill" : "pause.fill")
-                            .font(.system(size: 11, weight: .semibold))
-                            .contentTransition(.symbolEffect(.replace))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(wallpaperController.isPaused ? "Resume Wallpapers" : "Pause Wallpapers")
-                    
-                    Divider()
-                        .frame(height: 12)
-                        .background(Color.secondary.opacity(0.5))
-                    
-                    Button(action: {
-                        NSApplication.shared.terminate(nil)
-                    }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 11, weight: .bold))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Quit Lively")
+                Button(action: {
+                    wallpaperController.togglePause()
+                }) {
+                    Image(systemName: wallpaperController.isPaused ? "play.fill" : "pause.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(minWidth: 32, minHeight: 32)
+                        .contentShape(Rectangle())
+                        .contentTransition(.symbolEffect(.replace))
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Capsule().fill(Color.secondary.opacity(0.15)))
+                .buttonStyle(PressScaleButtonStyle())
+                .accessibilityLabel(wallpaperController.isPaused ? "Resume wallpapers" : "Pause wallpapers")
+                .help(wallpaperController.isPaused ? "Resume wallpapers" : "Pause wallpapers")
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(LivelyBrand.mutedForeground.opacity(0.12)))
             }
             .padding(.horizontal, LivelyBrand.Spacing.xl)
             .padding(.top, LivelyBrand.Spacing.lg)
@@ -105,7 +51,6 @@ public struct SettingsContainerView: View {
             Divider()
                 .overlay(LivelyBrand.border.opacity(0.45))
             
-            // Content Area
             ZStack {
                 switch selectedTab {
                 case .displays:

@@ -30,6 +30,7 @@ public class ConfigStore: ObservableObject {
         case persistFailed(Swift.Error)
         case loadFailed(Swift.Error)
         case bookmarkRefreshFailed(String)
+        case bookmarkCreationFailed(String)
     }
 
     public let errors = PassthroughSubject<Error, Never>()
@@ -63,21 +64,35 @@ public class ConfigStore: ObservableObject {
     /// Assigns a dynamic wallpaper configuration to a space.
     public func assign(dynamicWallpaper: DynamicWallpaper, toSpaceKey key: String) {
         var bookmarks: [String: Data] = [:]
-        
-        // Create security-scoped bookmarks so files remain accessible after relaunch
-        func bookmark(for url: URL?) -> Data? {
-            guard let url = url else { return nil }
-            return try? url.bookmarkData(
-                options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
-                includingResourceValuesForKeys: nil,
-                relativeTo: nil
-            )
+
+        func bookmark(for url: URL?, key: String) -> Data? {
+            guard let url else { return nil }
+            do {
+                return try url.bookmarkData(
+                    options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
+                    includingResourceValuesForKeys: nil,
+                    relativeTo: nil
+                )
+            } catch {
+                errors.send(.bookmarkCreationFailed(key))
+                LivelyLogger.config.error("Failed to create bookmark for \(key): \(error.localizedDescription)")
+                return nil
+            }
         }
-        
-        if let data = bookmark(for: dynamicWallpaper.staticURL) { bookmarks["static"] = data }
-        if let data = bookmark(for: dynamicWallpaper.lightURL) { bookmarks["light"] = data }
-        if let data = bookmark(for: dynamicWallpaper.darkURL) { bookmarks["dark"] = data }
-        
+
+        if let url = dynamicWallpaper.staticURL {
+            guard let data = bookmark(for: url, key: "static") else { return }
+            bookmarks["static"] = data
+        }
+        if let url = dynamicWallpaper.lightURL {
+            guard let data = bookmark(for: url, key: "light") else { return }
+            bookmarks["light"] = data
+        }
+        if let url = dynamicWallpaper.darkURL {
+            guard let data = bookmark(for: url, key: "dark") else { return }
+            bookmarks["dark"] = data
+        }
+
         let config = SpaceConfig(
             spaceKey: key,
             dynamicWallpaper: dynamicWallpaper,
@@ -96,11 +111,10 @@ public class ConfigStore: ObservableObject {
     /// is responsible for calling start/stop to balance the access handles.
     public func resolvedURL(for spaceKey: String, appearance: NSAppearance?) -> URL? {
         guard let config = configs[spaceKey] else { return nil }
-        
+
         let targetURL = config.dynamicWallpaper.url(for: appearance)
         guard let url = targetURL else { return nil }
-        
-        // Determine the bookmark key for this mode + URL
+
         let bookmarkKey: String
         switch config.dynamicWallpaper.mode {
         case .staticVideo: bookmarkKey = "static"
@@ -108,16 +122,15 @@ public class ConfigStore: ObservableObject {
             if url == config.dynamicWallpaper.darkURL { bookmarkKey = "dark" }
             else { bookmarkKey = "light" }
         }
-        
+
         guard let data = config.bookmarks[bookmarkKey] else {
-            LivelyLogger.config.debug("No bookmark for \(bookmarkKey), using raw path")
-            return FileManager.default.fileExists(atPath: url.path) ? url : nil
+            LivelyLogger.config.debug("No bookmark for \(bookmarkKey); rejecting raw path")
+            return nil
         }
 
         var isStale = false
 
         do {
-            // Try 1: resolve with security scope (new bookmarks saved with .withSecurityScope)
             let resolved = try URL(
                 resolvingBookmarkData: data,
                 options: [.withSecurityScope],
@@ -133,7 +146,6 @@ public class ConfigStore: ObservableObject {
             LivelyLogger.config.info("Resolved \(bookmarkKey) via security-scoped bookmark → \(resolved.lastPathComponent)")
             return resolved
         } catch {
-            // Try 2: resolve without security scope (legacy bookmarks from older app versions)
             do {
                 var legacyStale = false
                 let legacyResolved = try URL(
@@ -143,21 +155,20 @@ public class ConfigStore: ObservableObject {
                     bookmarkDataIsStale: &legacyStale
                 )
                 LivelyLogger.config.info("Legacy bookmark resolved for \(bookmarkKey), upgrading to security-scoped")
-                // Auto-upgrade: re-save with security scope for future launches
                 refreshBookmark(spaceKey: spaceKey, bookmarkKey: bookmarkKey, url: legacyResolved)
                 return legacyResolved
             } catch let legacyError {
                 LivelyLogger.config.error("Bookmark resolution failed for \(bookmarkKey). Primary error: \(error.localizedDescription). Legacy fallback error: \(legacyError.localizedDescription)")
-                return FileManager.default.fileExists(atPath: url.path) ? url : nil
+                return nil
             }
         }
     }
     
-    /// Resolves a specific bookmark key directly, returning a security-scoped URL.
+    /// Resolves a specific bookmark key directly.
     /// Used by secondary components like VideoThumbnailView to gain access.
     public func resolveBookmark(for spaceKey: String, bookmarkKey: String, fallbackURL: URL?) -> URL? {
-        guard let config = configs[spaceKey] else { return fallbackURL }
-        guard let data = config.bookmarks[bookmarkKey] else { return fallbackURL }
+        guard let config = configs[spaceKey] else { return nil }
+        guard let data = config.bookmarks[bookmarkKey] else { return nil }
         
         var isStale = false
         do {
@@ -171,14 +182,13 @@ public class ConfigStore: ObservableObject {
                 refreshBookmark(spaceKey: spaceKey, bookmarkKey: bookmarkKey, url: legacyResolved)
                 return legacyResolved
             } catch {
-                return fallbackURL
+                return nil
             }
         }
     }
     
     /// Re-creates a bookmark for a URL with security scope.
     private func refreshBookmark(spaceKey: String, bookmarkKey: String, url: URL) {
-        // Temporarily access the URL to re-bookmark it
         let didStart = url.startAccessingSecurityScopedResource()
         defer { if didStart { url.stopAccessingSecurityScopedResource() } }
         
@@ -216,8 +226,6 @@ public class ConfigStore: ObservableObject {
     }
 
     /// Updates only the display settings (gravity, mute, volume) for an existing config.
-    /// This is a lightweight path that skips security-scoped bookmark re-creation,
-    /// avoiding the expensive bookmark + full re-sync triggered by `assign(...)`.
     public func updateDisplaySettings(for key: String, gravity: VideoGravity, isMuted: Bool, volume: Float) {
         guard let existing = configs[key] else { return }
 
@@ -226,7 +234,6 @@ public class ConfigStore: ObservableObject {
         updated.isMuted = isMuted
         updated.volume = volume
 
-        // Only persist if something actually changed
         guard updated != existing.dynamicWallpaper else { return }
 
         let refreshed = SpaceConfig(
@@ -240,7 +247,6 @@ public class ConfigStore: ObservableObject {
     }
 
     /// Removes configs whose spaceKeys don't match any currently active screen space.
-    /// Call periodically (e.g. on app launch) to prevent unbounded config growth.
     public func pruneOrphanedConfigs(activeSpaceKeys: Set<String>) {
         let orphaned = configs.keys.filter { !activeSpaceKeys.contains($0) }
         guard !orphaned.isEmpty else { return }
@@ -259,14 +265,16 @@ public class ConfigStore: ObservableObject {
 
     /// Deletes all saved configuration data from disk and memory.
     public func clearAllData() {
+        pendingPersistWorkItem?.cancel()
+        pendingPersistWorkItem = nil
         configs.removeAll()
-        persist()
+
         let fm = FileManager.default
         let dir = configFileURL.deletingLastPathComponent()
         if fm.fileExists(atPath: dir.path) {
             do {
                 try fm.removeItem(at: dir)
-                LivelyLogger.config.info("Successfully deleted all application data from \(dir.path)")
+                LivelyLogger.config.info("Successfully deleted all application data")
             } catch {
                 LivelyLogger.config.error("Failed to delete application data: \(error.localizedDescription)")
             }
@@ -296,15 +304,13 @@ public class ConfigStore: ObservableObject {
         persistQueue.asyncAfter(deadline: .now() + .milliseconds(300), execute: workItem)
     }
 
-    /// Synchronously flushes any debounced pending write to disk.
-    /// Must be called before the process exits to prevent data loss.
     public func flushPendingPersist() {
         guard let pending = pendingPersistWorkItem else { return }
         pending.cancel()
         pendingPersistWorkItem = nil
 
         let snapshot = configs
-        let fileURL = self.configFileURL  // capture before crossing isolation boundary
+        let fileURL = self.configFileURL
         persistQueue.sync {
             do {
                 let data = try JSONEncoder().encode(snapshot)
@@ -327,11 +333,38 @@ public class ConfigStore: ObservableObject {
             let data = try Data(contentsOf: configFileURL)
             let decoded = try JSONDecoder().decode([String: SpaceConfig].self, from: data)
             configs = decoded
+            sanitizeLoadedConfigs()
             LivelyLogger.config.info("Loaded \(self.configs.count) assignment(s)")
         } catch {
             errors.send(.loadFailed(error))
             LivelyLogger.config.error("Failed to load existing config, starting fresh: \(error.localizedDescription)")
             configs = [:]
+        }
+    }
+
+    /// Drops configs with invalid extensions or missing required bookmarks.
+    private func sanitizeLoadedConfigs() {
+        let before = configs.count
+        configs = configs.filter { _, config in
+            isConfigPlayable(config)
+        }
+        guard configs.count != before else { return }
+        LivelyLogger.config.info("Sanitized config: dropped \(before - configs.count) invalid assignment(s)")
+        persist()
+    }
+
+    private func isConfigPlayable(_ config: SpaceConfig) -> Bool {
+        let wallpaper = config.dynamicWallpaper
+        switch wallpaper.mode {
+        case .staticVideo:
+            guard let url = wallpaper.staticURL,
+                  isValidLivelyVideoFile(url),
+                  config.bookmarks["static"] != nil else { return false }
+            return true
+        case .appearance:
+            let hasLight = wallpaper.lightURL.map { isValidLivelyVideoFile($0) && config.bookmarks["light"] != nil } ?? false
+            let hasDark = wallpaper.darkURL.map { isValidLivelyVideoFile($0) && config.bookmarks["dark"] != nil } ?? false
+            return hasLight || hasDark
         }
     }
 }

@@ -4,49 +4,7 @@ import AVFoundation
 import UniformTypeIdentifiers
 
 private let supportedVideoTypes: [UTType] = [.mpeg4Movie, .quickTimeMovie, .movie]
-
-// MARK: - Secondary Tab Bar
-
-private struct SecondaryTabBar: View {
-    @Binding var selection: DynamicMode
-    @Namespace private var tabIndicator
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        HStack(spacing: 2) {
-            tabButton("Wallpaper", mode: .staticVideo)
-            tabButton("Appearance", mode: .appearance)
-        }
-        .padding(3)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
-    }
-
-    private func tabButton(_ label: String, mode: DynamicMode) -> some View {
-        Button {
-            withAnimation(reduceMotion ? nil : LivelyBrand.Motion.fast) { selection = mode }
-        } label: {
-            Text(label)
-                .font(.system(size: 12, weight: .semibold))
-                .hidden()
-                .overlay {
-                    Text(label)
-                        .font(.system(size: 12, weight: selection == mode ? .semibold : .regular))
-                        .foregroundStyle(selection == mode ? Color.primary : Color.secondary)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 5)
-                .background {
-                    if selection == mode {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(.background)
-                            .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
-                            .matchedGeometryEffect(id: "pill", in: tabIndicator)
-                    }
-                }
-        }
-        .buttonStyle(.plain)
-    }
-}
+private let supportedCodecs: [FourCharCode] = [kCMVideoCodecType_H264, kCMVideoCodecType_HEVC]
 
 // MARK: - Screen Card View
 
@@ -55,58 +13,72 @@ struct ScreenCardView: View {
     let configStore: ConfigStore
 
     @State private var currentConfig: SpaceConfig?
-
-    // Drop targeting states
     @State private var isTargetedMain = false
     @State private var isTargetedLight = false
     @State private var isTargetedDark = false
-
-    // Settings disclosure removed
-    // @State private var showSettings = false
-
-    // Remove confirmation
     @State private var showRemoveConfirm = false
+    @State private var isValidating = false
 
-    // Environment
     @EnvironmentObject var wallpaperController: WallpaperController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // Error feedback
     @State private var errorMessage: String?
     @State private var errorClearTask: Task<Void, Swift.Error>?
 
-    private var config: SpaceConfig? {
-        currentConfig
-    }
-    
+    private var config: SpaceConfig? { currentConfig }
+
     private var currentWallpaper: DynamicWallpaper {
         config?.dynamicWallpaper ?? DynamicWallpaper()
+    }
+
+    private var assignedVideoLabel: String? {
+        if let url = currentWallpaper.staticURL, currentWallpaper.mode == .staticVideo {
+            return url.lastPathComponent
+        }
+        if currentWallpaper.mode == .appearance {
+            if let light = currentWallpaper.lightURL, let dark = currentWallpaper.darkURL {
+                return "\(light.lastPathComponent) · \(dark.lastPathComponent)"
+            }
+            return (currentWallpaper.lightURL ?? currentWallpaper.darkURL)?.lastPathComponent
+        }
+        return nil
     }
 
     var body: some View {
         VStack(spacing: 0) {
             displayHeader
-            
+
             Divider()
                 .overlay(LivelyBrand.border.opacity(0.35))
-            
-            // Mode Selection — custom secondary tab bar
-            SecondaryTabBar(selection: Binding(
-                get: { currentWallpaper.mode },
-                set: { newMode in
-                    var updated = currentWallpaper
-                    updated.mode = newMode
-                    configStore.assign(dynamicWallpaper: updated, toSpaceKey: space.spaceKey)
+
+            VStack(spacing: LivelyBrand.Spacing.sm) {
+                PillTabBar(
+                    tabs: [("Wallpaper", DynamicMode.staticVideo), ("Light & Dark", DynamicMode.appearance)],
+                    selection: Binding(
+                        get: { currentWallpaper.mode },
+                        set: { newMode in
+                            var updated = currentWallpaper
+                            updated.mode = newMode
+                            configStore.assign(dynamicWallpaper: updated, toSpaceKey: space.spaceKey)
+                        }
+                    )
+                )
+
+                if currentWallpaper.mode == .appearance {
+                    Text("Different videos for light and dark mode")
+                        .font(LivelyBrand.Typography.footnote)
+                        .foregroundStyle(LivelyBrand.mutedForeground)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-            ))
+            }
             .padding(.horizontal, LivelyBrand.Spacing.md)
             .padding(.vertical, LivelyBrand.Spacing.md)
-            
+
             HStack(spacing: 12) {
                 dropZone(
                     title: currentWallpaper.mode == .appearance ? "Light mode" : "",
                     icon: currentWallpaper.mode == .appearance ? "sun.max.fill" : "film",
-                    url: currentWallpaper.mode == .appearance 
+                    url: currentWallpaper.mode == .appearance
                         ? configStore.resolveBookmark(for: space.spaceKey, bookmarkKey: "light", fallbackURL: currentWallpaper.lightURL)
                         : configStore.resolveBookmark(for: space.spaceKey, bookmarkKey: "static", fallbackURL: currentWallpaper.staticURL),
                     isTargeted: currentWallpaper.mode == .appearance ? $isTargetedLight : $isTargetedMain,
@@ -138,29 +110,35 @@ struct ScreenCardView: View {
             }
             .padding(.horizontal, LivelyBrand.Spacing.md)
             .padding(.bottom, LivelyBrand.Spacing.md)
-            
-            // Per-video display settings (only when a wallpaper is assigned)
+
             if config != nil {
                 displaySettingsSection
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .offset(y: 6)),
+                        removal: .opacity
+                    ))
             }
         }
-        .liquidGlass(.regular.tint(LivelyBrand.card).opacity(0.12), in: RoundedRectangle(cornerRadius: LivelyBrand.Radius.lg))
+        .background(
+            RoundedRectangle(cornerRadius: LivelyBrand.Radius.lg)
+                .fill(LivelyBrand.card.opacity(0.88))
+        )
         .overlay(
             RoundedRectangle(cornerRadius: LivelyBrand.Radius.lg)
                 .strokeBorder(LivelyBrand.border.opacity(0.45))
         )
         .animation(reduceMotion ? nil : LivelyBrand.Motion.fast, value: errorMessage)
-        // .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: showSettings)
         .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: currentWallpaper.mode)
+        .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: config != nil)
         .overlay(alignment: .top) {
             if let error = errorMessage {
                 Text(error)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(LivelyBrand.Typography.footnote.weight(.medium))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(LivelyBrand.destructive.opacity(0.92))
-                    .cornerRadius(LivelyBrand.Radius.sm)
+                    .clipShape(.rect(cornerRadius: LivelyBrand.Radius.sm))
                     .padding(.top, LivelyBrand.Spacing.sm)
                     .transition(.asymmetric(
                         insertion: .move(edge: .top).combined(with: .opacity),
@@ -169,22 +147,21 @@ struct ScreenCardView: View {
                     .zIndex(10)
             }
         }
+        .confirmationDialog(
+            "Remove wallpaper?",
+            isPresented: $showRemoveConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Remove", role: .destructive) {
+                configStore.remove(spaceKey: space.spaceKey)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the assigned video from \(space.displayName).")
+        }
         .onReceive(wallpaperController.playbackErrors) { (targetSpaceKey, message) in
-            // Only show the error on the card for the display that failed
             if targetSpaceKey == space.spaceKey {
-                errorMessage = "Playback failed: \(message)"
-                AccessibilityNotification.Announcement("Playback failed: \(message)").post()
-                
-                // Cancel any pending clear
-                errorClearTask?.cancel()
-                
-                // Auto-clear after 5 seconds
-                errorClearTask = Task { @MainActor in
-                    try? await Task.sleep(for: .seconds(5))
-                    if !Task.isCancelled {
-                        errorMessage = nil
-                    }
-                }
+                showError("Playback failed: \(message)")
             }
         }
         .onAppear {
@@ -192,7 +169,9 @@ struct ScreenCardView: View {
         }
         .onReceive(configStore.$configs) { newConfigs in
             let newConfig = newConfigs[space.spaceKey]
-            if currentConfig?.dynamicWallpaper != newConfig?.dynamicWallpaper || (currentConfig == nil && newConfig != nil) || (currentConfig != nil && newConfig == nil) {
+            if currentConfig?.dynamicWallpaper != newConfig?.dynamicWallpaper
+                || (currentConfig == nil && newConfig != nil)
+                || (currentConfig != nil && newConfig == nil) {
                 currentConfig = newConfig
             }
         }
@@ -203,18 +182,18 @@ struct ScreenCardView: View {
     private var displayHeader: some View {
         HStack(spacing: 12) {
             Image(systemName: "display")
-                .font(.system(size: 14))
-                .foregroundStyle(Color.secondary)
+                .font(LivelyBrand.Typography.section)
+                .foregroundStyle(LivelyBrand.mutedForeground)
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(space.displayName)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(LivelyBrand.Typography.title)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                if let url = space.desktopImageURL {
-                    Text(url.lastPathComponent)
-                        .font(.system(size: 13))
+                if let label = assignedVideoLabel {
+                    Text(label)
+                        .font(LivelyBrand.Typography.mono)
                         .foregroundStyle(LivelyBrand.mutedForeground)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -222,59 +201,41 @@ struct ScreenCardView: View {
             }
 
             Spacer()
-            
+
             if config != nil {
                 Button {
                     showRemoveConfirm = true
                 } label: {
                     Label("Remove wallpaper", systemImage: "trash")
                         .labelStyle(.iconOnly)
-                        .font(.system(size: 11))
+                        .font(LivelyBrand.Typography.footnote)
                         .foregroundStyle(LivelyBrand.destructive)
+                        .frame(minWidth: 32, minHeight: 32)
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.glass)
+                .buttonStyle(PressScaleButtonStyle())
+                .accessibilityLabel("Remove wallpaper")
                 .accessibilityHint("Removes the assigned wallpaper from this display")
-                .popover(isPresented: $showRemoveConfirm) {
-                    VStack(spacing: 12) {
-                        Text("Remove wallpaper?")
-                            .font(.system(size: 13, weight: .semibold))
-                        
-                        HStack(spacing: 8) {
-                            Button("Cancel") {
-                                showRemoveConfirm = false
-                            }
-                            .buttonStyle(.bordered)
-                            
-                            Button("Remove") {
-                                configStore.remove(spaceKey: space.spaceKey)
-                                showRemoveConfirm = false
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.red)
-                        }
-                    }
-                    .padding(LivelyBrand.Spacing.lg)
-                }
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
         .padding(.horizontal, LivelyBrand.Spacing.lg)
         .padding(.vertical, LivelyBrand.Spacing.lg)
     }
-    
+
     // MARK: - Display Settings
-    
+
     private var displaySettingsSection: some View {
         VStack(spacing: 0) {
-            Divider().opacity(0.15)
+            Divider()
                 .overlay(LivelyBrand.border.opacity(0.35))
-            
+
             HStack(spacing: 16) {
-                // Video Gravity (Fill/Fit) — native popup menu
                 HStack(spacing: 6) {
                     Text("Scale:")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(LivelyBrand.Typography.footnote.weight(.medium))
                         .foregroundStyle(LivelyBrand.mutedForeground)
-                    
+
                     Picker("Scale", selection: Binding(
                         get: { currentWallpaper.videoGravity },
                         set: { newValue in
@@ -293,10 +254,9 @@ struct ScreenCardView: View {
                     .controlSize(.small)
                     .labelsHidden()
                 }
-                
+
                 Spacer()
-                
-                // Mute/Unmute
+
                 Button {
                     let newValue = !currentWallpaper.isMuted
                     configStore.updateDisplaySettings(
@@ -307,18 +267,19 @@ struct ScreenCardView: View {
                     )
                 } label: {
                     Image(systemName: currentWallpaper.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                        .font(.system(size: 11))
+                        .font(LivelyBrand.Typography.footnote)
                         .foregroundStyle(currentWallpaper.isMuted ? LivelyBrand.mutedForeground : LivelyBrand.primary)
-                        .padding(6)
+                        .frame(minWidth: 32, minHeight: 32)
+                        .contentShape(Circle())
                         .background(
                             Circle()
                                 .fill(currentWallpaper.isMuted ? Color.clear : LivelyBrand.primary.opacity(0.15))
                         )
+                        .contentTransition(.symbolEffect(.replace))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressScaleButtonStyle())
                 .accessibilityLabel(currentWallpaper.isMuted ? "Unmute" : "Mute")
-                
-                // Volume slider (only when not muted)
+
                 if !currentWallpaper.isMuted {
                     Slider(
                         value: Binding(
@@ -334,9 +295,11 @@ struct ScreenCardView: View {
                         ),
                         in: 0...1
                     )
-                    .tint(Color.accentColor)
-                    .controlSize(.mini)
-                    .frame(width: 60)
+                    .tint(LivelyBrand.primary)
+                    .controlSize(.small)
+                    .frame(width: 80)
+                    .accessibilityLabel("Volume")
+                    .accessibilityValue("\(Int(currentWallpaper.volume * 100)) percent")
                     .transition(.asymmetric(
                         insertion: .opacity.combined(with: .offset(x: -8)),
                         removal: .opacity.combined(with: .offset(x: -4))
@@ -345,12 +308,10 @@ struct ScreenCardView: View {
             }
             .padding(.horizontal, LivelyBrand.Spacing.lg)
             .padding(.vertical, LivelyBrand.Spacing.md)
+            .animation(reduceMotion ? nil : LivelyBrand.Motion.fast, value: currentWallpaper.isMuted)
         }
     }
 
-    // MARK: - Transitions
-
-    /// Mode content swap: subtle enter from bottom, exit via opacity only (Jakub's rule).
     private var modeTransition: AnyTransition {
         .asymmetric(
             insertion: .opacity.combined(with: .offset(y: 6)),
@@ -359,7 +320,7 @@ struct ScreenCardView: View {
     }
 
     // MARK: Drop Zone
-    
+
     private func dropZone(
         title: String,
         icon: String,
@@ -371,47 +332,56 @@ struct ScreenCardView: View {
             openFilePicker(onPick: onDrop)
         } label: {
             VStack(spacing: 8) {
-                if let url = url {
+                if isValidating {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(maxWidth: .infinity, minHeight: 80)
+                } else if let url = url {
                     VideoThumbnailView(url: url)
-                    
+
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(LivelyBrand.primary)
-                            .font(.system(size: 12))
+                            .font(LivelyBrand.Typography.caption)
                         Text(url.lastPathComponent)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(LivelyBrand.Typography.body.weight(.medium))
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
                     .padding(.horizontal, LivelyBrand.Spacing.sm)
                     .padding(.vertical, LivelyBrand.Spacing.xs)
-                    .background(LivelyBrand.accent.opacity(0.7))
-                    .cornerRadius(LivelyBrand.Radius.sm)
-                    
+
                     if !title.isEmpty {
                         Text(title)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(LivelyBrand.Typography.caption)
                             .foregroundStyle(LivelyBrand.mutedForeground)
                     }
                 } else {
                     VStack(spacing: 6) {
-                        Image(systemName: isTargeted.wrappedValue ? "arrow.down.circle.fill" : icon)
-                            .font(.system(size: 28))
-                            .symbolEffect(.bounce, value: isTargeted.wrappedValue)
-                            .foregroundStyle(isTargeted.wrappedValue ? LivelyBrand.primary : LivelyBrand.mutedForeground)
-                            .contentTransition(.symbolEffect(.replace))
-                        
+                        Group {
+                            if !reduceMotion {
+                                Image(systemName: isTargeted.wrappedValue ? "arrow.down.circle.fill" : icon)
+                                    .symbolEffect(.pulse, value: isTargeted.wrappedValue)
+                            } else {
+                                Image(systemName: isTargeted.wrappedValue ? "arrow.down.circle.fill" : icon)
+                            }
+                        }
+                        .font(.system(size: 28))
+                        .foregroundStyle(isTargeted.wrappedValue ? LivelyBrand.primary : LivelyBrand.mutedForeground)
+                        .contentTransition(.symbolEffect(.replace))
+
                         if isTargeted.wrappedValue {
-                            Text("Drop Here")
-                                .font(.system(size: 12, weight: .medium))
+                            Text("Drop here")
+                                .font(LivelyBrand.Typography.caption)
                                 .foregroundStyle(LivelyBrand.foreground)
+                                .transition(.opacity)
                         } else if title.isEmpty {
-                            Text("Drop video or click to browse")
-                                .font(.system(size: 12, weight: .medium))
+                            Text("Drop a video, or click to browse")
+                                .font(LivelyBrand.Typography.caption)
                                 .foregroundStyle(LivelyBrand.mutedForeground)
                         } else {
                             Text(title)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(LivelyBrand.Typography.caption)
                                 .foregroundStyle(LivelyBrand.mutedForeground)
                         }
                     }
@@ -433,22 +403,19 @@ struct ScreenCardView: View {
             .padding(LivelyBrand.Spacing.md)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 60)
-            .liquidGlass(
-                isTargeted.wrappedValue
-                    ? .regular.tint(LivelyBrand.primary).opacity(0.16)
-                    : .regular.tint(LivelyBrand.accent).opacity(0.10),
-                in: RoundedRectangle(cornerRadius: LivelyBrand.Radius.md)
+            .background(
+                RoundedRectangle(cornerRadius: LivelyBrand.Radius.md)
+                    .fill(
+                        isTargeted.wrappedValue
+                            ? LivelyBrand.primary.opacity(0.12)
+                            : LivelyBrand.accent.opacity(0.35)
+                    )
             )
         }
         .buttonStyle(.plain)
         .scaleEffect(isTargeted.wrappedValue ? 1.03 : 1.0)
-        .animation(
-            reduceMotion ? nil : (isTargeted.wrappedValue
-                ? .spring(duration: 0.35, bounce: 0.35)
-                : .spring(duration: 0.2, bounce: 0)),
-            value: isTargeted.wrappedValue
-        )
-        .accessibilityLabel(url == nil ? "\(title.isEmpty ? "Wallpaper" : title), choose video" : "\(title.isEmpty ? "Wallpaper" : title), \(url?.lastPathComponent ?? "video assigned")")
+        .animation(reduceMotion ? nil : LivelyBrand.Motion.dropTarget, value: isTargeted.wrappedValue)
+        .accessibilityLabel(url == nil ? "\(title.isEmpty ? "Wallpaper" : title), choose video" : "\(title.isEmpty ? "Wallpaper" : title), \(url.lastPathComponent)")
         .accessibilityHint("Drag and drop a video, or click to browse")
         .onDrop(of: [.fileURL], isTargeted: isTargeted) { providers in
             guard let provider = providers.first else { return false }
@@ -478,13 +445,14 @@ struct ScreenCardView: View {
         }
     }
 
-    // Validates extension, reachability, and codec before accepting a URL.
-    // VP9 and AV1 are rejected — AVPlayer wallpaper sessions can't reliably decode them.
     private func acceptURL(_ url: URL, onAccept: @escaping @MainActor (URL) -> Void) async {
         guard isValidLivelyVideoFile(url) else {
             showError("Unsupported format. Use .mp4, .mov, or .m4v")
             return
         }
+
+        isValidating = true
+        defer { isValidating = false }
 
         let scopeGranted = url.startAccessingSecurityScopedResource()
 
@@ -495,19 +463,31 @@ struct ScreenCardView: View {
         }
 
         let asset = AVURLAsset(url: url)
-        if let tracks = try? await asset.loadTracks(withMediaType: .video) {
-            for track in tracks {
-                if let descs = try? await track.load(.formatDescriptions) {
-                    for desc in descs {
-                        let codec = CMFormatDescriptionGetMediaSubType(desc)
-                        if codec == kCMVideoCodecType_VP9 || codec == kCMVideoCodecType_AV1 {
-                            if scopeGranted { url.stopAccessingSecurityScopedResource() }
-                            showError("VP9/AV1 codec not supported. Re-encode to H.264 or HEVC.")
-                            return
-                        }
-                    }
+        guard let tracks = try? await asset.loadTracks(withMediaType: .video), !tracks.isEmpty else {
+            if scopeGranted { url.stopAccessingSecurityScopedResource() }
+            showError("No video track found in this file.")
+            return
+        }
+
+        var foundSupported = false
+        for track in tracks {
+            guard let descs = try? await track.load(.formatDescriptions) else { continue }
+            for desc in descs {
+                let codec = CMFormatDescriptionGetMediaSubType(desc)
+                if supportedCodecs.contains(codec) {
+                    foundSupported = true
+                } else {
+                    if scopeGranted { url.stopAccessingSecurityScopedResource() }
+                    showError("Only H.264 and HEVC are supported. Re-encode this file.")
+                    return
                 }
             }
+        }
+
+        guard foundSupported else {
+            if scopeGranted { url.stopAccessingSecurityScopedResource() }
+            showError("Only H.264 and HEVC are supported. Re-encode this file.")
+            return
         }
 
         errorMessage = nil

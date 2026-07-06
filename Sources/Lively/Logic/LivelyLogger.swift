@@ -2,27 +2,33 @@ import Foundation
 import os
 import Combine
 
+public struct LogEntry: Identifiable, Sendable {
+    public let id = UUID()
+    public let text: String
+    public let isError: Bool
+}
+
 @MainActor
 public final class LogStore: ObservableObject {
     public static let shared = LogStore()
-    
-    @Published public private(set) var entries: [String] = []
-    
+
+    @Published public private(set) var entries: [LogEntry] = []
+
     private init() {}
-    
-    public func add(_ message: String) {
-        entries.append(message)
+
+    public func add(_ message: String, isError: Bool = false) {
+        entries.append(LogEntry(text: message, isError: isError))
         if entries.count > 1000 {
             entries.removeFirst(entries.count - 1000)
         }
     }
-    
+
     public func clear() {
         entries.removeAll()
     }
-    
+
     public var allLogsFormatted: String {
-        entries.joined(separator: "\n")
+        entries.map(\.text).joined(separator: "\n")
     }
 }
 
@@ -40,7 +46,7 @@ public struct LivelyCategoryLogger: Sendable {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             let ts = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .medium)
             Task { @MainActor in
-                LogStore.shared.add("[\(ts)] [\(category)] INFO: \(message)")
+                LogStore.shared.add("[\(ts)] [\(category)] INFO: \(message)", isError: false)
             }
         }
     }
@@ -50,7 +56,7 @@ public struct LivelyCategoryLogger: Sendable {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             let ts = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .medium)
             Task { @MainActor in
-                LogStore.shared.add("[\(ts)] [\(category)] ERROR: \(message)")
+                LogStore.shared.add("[\(ts)] [\(category)] ERROR: \(message)", isError: true)
             }
         }
     }
@@ -60,7 +66,7 @@ public struct LivelyCategoryLogger: Sendable {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             let ts = DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .medium)
             Task { @MainActor in
-                LogStore.shared.add("[\(ts)] [\(category)] DEBUG: \(message)")
+                LogStore.shared.add("[\(ts)] [\(category)] DEBUG: \(message)", isError: false)
             }
         }
     }

@@ -131,4 +131,45 @@ struct ConfigStoreTests {
         let resolved = configStore.resolvedURL(for: "nonexistent", appearance: nil)
         #expect(resolved == nil)
     }
+
+    @Test func pruneOrphanedConfigs() async {
+        let tempFile = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
+        defer { try? FileManager.default.removeItem(at: tempFile) }
+        let configStore = ConfigStore(configFileURL: tempFile)
+
+        let tempVideo = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "_prune.mp4")
+        FileManager.default.createFile(atPath: tempVideo.path, contents: Data(), attributes: nil)
+        defer { try? FileManager.default.removeItem(at: tempVideo) }
+
+        var wallpaper = DynamicWallpaper()
+        wallpaper.staticURL = tempVideo
+        configStore.assign(dynamicWallpaper: wallpaper, toSpaceKey: "active:space")
+        configStore.assign(dynamicWallpaper: wallpaper, toSpaceKey: "orphan:space")
+
+        configStore.pruneOrphanedConfigs(activeSpaceKeys: ["active:space"])
+
+        #expect(configStore.configs["active:space"] != nil)
+        #expect(configStore.configs["orphan:space"] == nil)
+    }
+
+    @Test func clearAllDataCancelsPendingPersist() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let tempFile = tempDir.appendingPathComponent("config_v2.json")
+        let configStore = ConfigStore(configFileURL: tempFile)
+
+        let tempVideo = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "_clear.mp4")
+        FileManager.default.createFile(atPath: tempVideo.path, contents: Data(), attributes: nil)
+        defer { try? FileManager.default.removeItem(at: tempVideo) }
+
+        var wallpaper = DynamicWallpaper()
+        wallpaper.staticURL = tempVideo
+        configStore.assign(dynamicWallpaper: wallpaper, toSpaceKey: "clear:test")
+
+        configStore.clearAllData()
+        #expect(configStore.configs.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: tempDir.path) == false)
+    }
 }
