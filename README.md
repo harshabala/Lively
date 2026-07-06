@@ -11,16 +11,53 @@ Lively is a native macOS menu-bar utility that plays looping, hardware-accelerat
 
 ---
 
-## Download
+## Download & install
 
-**Latest release: [v1.0.0](https://github.com/harshabala/Lively/releases/tag/v1.0.0)** (6 July 2026)
+**Latest release: [v1.0.0](https://github.com/harshabala/Lively/releases/latest)** · [All releases](https://github.com/harshabala/Lively/releases)
 
-| Option | How |
-|--------|-----|
-| **Build from source** | Clone this repo and run `swift run LivelyApp` or `./package.sh` |
-| **Release notes** | See [CHANGELOG.md](CHANGELOG.md) and [GitHub Releases](https://github.com/harshabala/Lively/releases) |
+### Option 1 — Download zip (recommended)
 
-> Pre-built `.app` binaries may be attached to GitHub Releases when available. Until then, build locally with `./package.sh` — the script assembles a signed `.app` at `/private/tmp/LivelyOutput/Lively.app`.
+1. Download **`Lively-1.0.0-macOS.zip`** from [GitHub Releases](https://github.com/harshabala/Lively/releases/latest)
+2. Unzip and drag **`Lively.app`** to **Applications**
+3. Clear macOS download quarantine (required once — see below)
+4. Open Lively — look for the **play.tv** icon in the menu bar
+
+### Option 2 — Homebrew
+
+```bash
+brew tap harshabala/lively https://github.com/harshabala/Lively
+brew install --cask lively
+```
+
+Homebrew installs to `/Applications/Lively.app` and clears quarantine automatically. If macOS still blocks launch, run the command in the next section.
+
+### First launch: Gatekeeper (no Apple Developer ID)
+
+Lively is **ad-hoc signed**, not notarized. macOS marks downloads from the internet with a **quarantine flag** and may refuse to open apps from unidentified developers.
+
+**Run this once in Terminal after installing:**
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Lively.app
+```
+
+| | |
+|---|---|
+| **What it does** | Removes the `com.apple.quarantine` attribute macOS adds to downloaded files |
+| **Why it's needed** | Without an Apple Developer ID, Lively cannot be notarized. Clearing quarantine tells macOS you trust this download |
+| **Is it safe?** | Only run this on `Lively.app` you downloaded from [this repository's Releases](https://github.com/harshabala/Lively/releases) |
+
+Then open the app:
+
+```bash
+open /Applications/Lively.app
+```
+
+If macOS still warns you, **right-click → Open** on `Lively.app` once and confirm.
+
+### Option 3 — Build from source (developers)
+
+Requires **Xcode 15+**. See [Building](#building) below.
 
 ---
 
@@ -31,7 +68,7 @@ Most video-wallpaper apps on macOS are Electron shells or web renderers duct-tap
 | | |
 |---|---|
 | **Platform** | macOS 14.0 (Sonoma) or later |
-| **Distribution** | Build from source or package with `package.sh` |
+| **Distribution** | [GitHub Releases](https://github.com/harshabala/Lively/releases) zip or Homebrew cask |
 | **Privacy** | Fully offline — no analytics, telemetry, or network entitlement |
 | **Codecs** | H.264 and HEVC only (hardware-decoded) |
 | **License** | [MIT](LICENSE) — free to use, modify, and distribute |
