@@ -1,8 +1,26 @@
 # Lively
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-teal.svg)](LICENSE)
+[![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue.svg)](https://www.apple.com/macos/)
+[![Swift 6.2](https://img.shields.io/badge/Swift-6.2-orange.svg)](https://swift.org)
+[![Release](https://img.shields.io/github/v/release/harshabala/Lively)](https://github.com/harshabala/Lively/releases)
+
 **Video wallpapers for every Space on your Mac.**
 
 Lively is a native macOS menu-bar utility that plays looping, hardware-accelerated video behind your desktop — independently on each display and each Space. Switch to your focus Space and one clip is playing; swipe to your music Space and another is already looping. No Dock icon, no browser wrapper, no cloud account. Just your wallpaper, quietly doing its job.
+
+---
+
+## Download
+
+**Latest release: [v1.0.0](https://github.com/harshabala/Lively/releases/tag/v1.0.0)** (6 July 2026)
+
+| Option | How |
+|--------|-----|
+| **Build from source** | Clone this repo and run `swift run LivelyApp` or `./package.sh` |
+| **Release notes** | See [CHANGELOG.md](CHANGELOG.md) and [GitHub Releases](https://github.com/harshabala/Lively/releases) |
+
+> Pre-built `.app` binaries may be attached to GitHub Releases when available. Until then, build locally with `./package.sh` — the script assembles a signed `.app` at `/private/tmp/LivelyOutput/Lively.app`.
 
 ---
 
@@ -16,7 +34,7 @@ Most video-wallpaper apps on macOS are Electron shells or web renderers duct-tap
 | **Distribution** | Build from source or package with `package.sh` |
 | **Privacy** | Fully offline — no analytics, telemetry, or network entitlement |
 | **Codecs** | H.264 and HEVC only (hardware-decoded) |
-| **License** | © 2026 Harsha Balakrishnan |
+| **License** | [MIT](LICENSE) — free to use, modify, and distribute |
 
 ---
 
@@ -295,6 +313,27 @@ Lively uses **no third-party libraries**. Built entirely on Apple frameworks:
 
 ---
 
+## License
+
+Lively is released under the **[MIT License](LICENSE)**.
+
+You are free to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the software, subject to the license terms. The software is provided "as is", without warranty of any kind.
+
+---
+
+## Contributing
+
+Contributions are welcome. Open an issue to discuss bugs or feature ideas, or submit a pull request.
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/my-change`)
+3. Run `./test.sh` before opening a PR
+4. Open a pull request against `master`
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
+---
+
 ## Developer
 
 Built by **[@harshabala](https://github.com/harshabala)**.
@@ -305,4 +344,4 @@ Questions or ideas → **[github.com/harshabala/Lively/issues](https://github.co
 
 ---
 
-*© 2026 Harsha Balakrishnan. All rights reserved.*
+*Copyright © 2026 Harsha Balakrishnan. Licensed under MIT.*
