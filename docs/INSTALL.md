@@ -55,6 +55,8 @@ Releases are built automatically by GitHub Actions when a `v*` tag is pushed, or
 gh workflow run release.yml -f tag=v1.0.0
 ```
 
+The workflow runs on `macos-15` with **Xcode 26.3** (Swift 6.2). Older runners like `macos-14` only ship Swift 5.10 and cannot build this project.
+
 Local fallback (Mac with Xcode):
 
 ```bash
