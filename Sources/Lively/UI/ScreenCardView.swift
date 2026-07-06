@@ -448,7 +448,10 @@ struct ScreenCardView: View {
         .buttonStyle(.plain)
         .scaleEffect(isTargeted.wrappedValue ? 1.03 : 1.0)
         .animation(reduceMotion ? nil : LivelyBrand.Motion.dropTarget, value: isTargeted.wrappedValue)
-        .accessibilityLabel(url == nil ? "\(title.isEmpty ? "Wallpaper" : title), choose video" : "\(title.isEmpty ? "Wallpaper" : title), \(url.lastPathComponent)")
+        .accessibilityLabel(
+            url.map { "\(title.isEmpty ? "Wallpaper" : title), \($0.lastPathComponent)" }
+                ?? "\(title.isEmpty ? "Wallpaper" : title), choose video"
+        )
         .accessibilityHint("Drag and drop a video, or click to browse")
         .onDrop(of: [.fileURL], isTargeted: isTargeted) { providers in
             guard let provider = providers.first else { return false }
@@ -487,9 +490,9 @@ struct ScreenCardView: View {
             defer { isValidating.wrappedValue = false }
 
             switch await VideoURLValidation.validate(url) {
-            case .failure(let message):
+            case .invalid(let message):
                 showError(message)
-            case .success(let validURL):
+            case .valid(let validURL):
                 errorMessage = nil
                 onAccept(validURL)
             }
@@ -521,21 +524,26 @@ struct ScreenCardView: View {
 // MARK: - Video URL Validation
 
 private enum VideoURLValidation {
-    static func validate(_ url: URL) async -> Result<URL, String> {
+    enum Outcome {
+        case valid(URL)
+        case invalid(String)
+    }
+
+    static func validate(_ url: URL) async -> Outcome {
         guard isValidLivelyVideoFile(url) else {
-            return .failure("Unsupported format. Use .mp4, .mov, or .m4v")
+            return .invalid("Unsupported format. Use .mp4, .mov, or .m4v")
         }
 
         let scopeGranted = url.startAccessingSecurityScopedResource()
         defer { if scopeGranted { url.stopAccessingSecurityScopedResource() } }
 
         guard FileManager.default.fileExists(atPath: url.path) else {
-            return .failure("File not found or not accessible.")
+            return .invalid("File not found or not accessible.")
         }
 
         let asset = AVURLAsset(url: url)
         guard let tracks = try? await asset.loadTracks(withMediaType: .video), !tracks.isEmpty else {
-            return .failure("No video track found in this file.")
+            return .invalid("No video track found in this file.")
         }
 
         var foundSupported = false
@@ -546,15 +554,15 @@ private enum VideoURLValidation {
                 if supportedCodecs.contains(codec) {
                     foundSupported = true
                 } else {
-                    return .failure("Only H.264 and HEVC are supported. Re-encode this file.")
+                    return .invalid("Only H.264 and HEVC are supported. Re-encode this file.")
                 }
             }
         }
 
         guard foundSupported else {
-            return .failure("Only H.264 and HEVC are supported. Re-encode this file.")
+            return .invalid("Only H.264 and HEVC are supported. Re-encode this file.")
         }
 
-        return .success(url)
+        return .valid(url)
     }
 }

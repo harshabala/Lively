@@ -37,7 +37,7 @@ public struct DisplaysView: View {
                     .transition(.opacity.combined(with: .offset(y: 8)))
             } else {
                 VStack(spacing: LivelyBrand.Spacing.md) {
-                    ForEach(spaceMonitor.screenSpaces.enumerated(), id: \.element.id) { index, space in
+                    ForEach(Array(spaceMonitor.screenSpaces.enumerated()), id: \.element.id) { index, space in
                         ScreenCardView(space: space, configStore: configStore)
                             .transition(.asymmetric(
                                 insertion: .opacity.combined(with: .offset(y: 12)),
