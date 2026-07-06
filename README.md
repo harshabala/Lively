@@ -197,7 +197,7 @@ ffmpeg -i "$F" -c:v libx265 -crf 24 -preset fast -an output_hevc.mp4
 ## Requirements
 
 - macOS 14.0 (Sonoma) or later
-- Swift 6.2+ (Xcode or Command Line Tools)
+- **Xcode 15+** with Swift 6.2 (full Xcode required — Command Line Tools alone cannot build SwiftUI)
 - Apple Silicon or Intel Mac
 
 ---
@@ -218,7 +218,7 @@ swift build -c release
 swift run LivelyApp
 ```
 
-> **Note:** Command Line Tools ships `Testing.framework` in a non-standard path. `test.sh` adds the required search and rpath flags. Full Xcode also supports `swift test`.
+> **Note:** Lively uses SwiftUI macros (`@State`, `@Observable`) that require the SwiftUI macro plugin shipped with **full Xcode**. If `swift build` fails with `SwiftUIMacros not found`, install Xcode from the App Store and run `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`. For tests, `test.sh` adds the required rpath flags when using Command Line Tools.
 
 ### Package a signed `.app` bundle
 

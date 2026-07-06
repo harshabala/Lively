@@ -458,9 +458,7 @@ struct ScreenCardView: View {
                     let url = URL(dataRepresentation: data, relativeTo: nil)
                 else { return }
 
-                Task { @MainActor in
-                    await acceptURL(url, isValidating: isValidating, onAccept: onDrop)
-                }
+                handleURLSelection(url, isValidating: isValidating, onAccept: onDrop)
             }
             return true
         }
@@ -478,58 +476,24 @@ struct ScreenCardView: View {
         }
     }
 
-    private func acceptURL(
+    @MainActor
+    private func handleURLSelection(
         _ url: URL,
         isValidating: Binding<Bool>,
         onAccept: @escaping @MainActor (URL) -> Void
-    ) async {
-        guard isValidLivelyVideoFile(url) else {
-            showError("Unsupported format. Use .mp4, .mov, or .m4v")
-            return
-        }
+    ) {
+        Task { @MainActor in
+            isValidating.wrappedValue = true
+            defer { isValidating.wrappedValue = false }
 
-        isValidating.wrappedValue = true
-        defer { isValidating.wrappedValue = false }
-
-        let scopeGranted = url.startAccessingSecurityScopedResource()
-
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            if scopeGranted { url.stopAccessingSecurityScopedResource() }
-            showError("File not found or not accessible.")
-            return
-        }
-
-        let asset = AVURLAsset(url: url)
-        guard let tracks = try? await asset.loadTracks(withMediaType: .video), !tracks.isEmpty else {
-            if scopeGranted { url.stopAccessingSecurityScopedResource() }
-            showError("No video track found in this file.")
-            return
-        }
-
-        var foundSupported = false
-        for track in tracks {
-            guard let descs = try? await track.load(.formatDescriptions) else { continue }
-            for desc in descs {
-                let codec = CMFormatDescriptionGetMediaSubType(desc)
-                if supportedCodecs.contains(codec) {
-                    foundSupported = true
-                } else {
-                    if scopeGranted { url.stopAccessingSecurityScopedResource() }
-                    showError("Only H.264 and HEVC are supported. Re-encode this file.")
-                    return
-                }
+            switch await VideoURLValidation.validate(url) {
+            case .failure(let message):
+                showError(message)
+            case .success(let validURL):
+                errorMessage = nil
+                onAccept(validURL)
             }
         }
-
-        guard foundSupported else {
-            if scopeGranted { url.stopAccessingSecurityScopedResource() }
-            showError("Only H.264 and HEVC are supported. Re-encode this file.")
-            return
-        }
-
-        errorMessage = nil
-        onAccept(url)
-        if scopeGranted { url.stopAccessingSecurityScopedResource() }
     }
 
     private func openFilePicker(
@@ -548,8 +512,49 @@ struct ScreenCardView: View {
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             Task { @MainActor in
-                await self.acceptURL(url, isValidating: isValidating, onAccept: onPick)
+                self.handleURLSelection(url, isValidating: isValidating, onAccept: onPick)
             }
         }
+    }
+}
+
+// MARK: - Video URL Validation
+
+private enum VideoURLValidation {
+    static func validate(_ url: URL) async -> Result<URL, String> {
+        guard isValidLivelyVideoFile(url) else {
+            return .failure("Unsupported format. Use .mp4, .mov, or .m4v")
+        }
+
+        let scopeGranted = url.startAccessingSecurityScopedResource()
+        defer { if scopeGranted { url.stopAccessingSecurityScopedResource() } }
+
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return .failure("File not found or not accessible.")
+        }
+
+        let asset = AVURLAsset(url: url)
+        guard let tracks = try? await asset.loadTracks(withMediaType: .video), !tracks.isEmpty else {
+            return .failure("No video track found in this file.")
+        }
+
+        var foundSupported = false
+        for track in tracks {
+            guard let descs = try? await track.load(.formatDescriptions) else { continue }
+            for desc in descs {
+                let codec = CMFormatDescriptionGetMediaSubType(desc)
+                if supportedCodecs.contains(codec) {
+                    foundSupported = true
+                } else {
+                    return .failure("Only H.264 and HEVC are supported. Re-encode this file.")
+                }
+            }
+        }
+
+        guard foundSupported else {
+            return .failure("Only H.264 and HEVC are supported. Re-encode this file.")
+        }
+
+        return .success(url)
     }
 }

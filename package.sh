@@ -2,6 +2,15 @@
 
 set -euo pipefail
 
+# SwiftUI requires the macro plugin from full Xcode, not Command Line Tools alone.
+if [[ -d "/Applications/Xcode.app/Contents/Developer" ]]; then
+    export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+elif ! xcodebuild -version &>/dev/null; then
+    echo "❌ Full Xcode is required to build Lively (SwiftUI macros)."
+    echo "   Install Xcode, then run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"
+    exit 1
+fi
+
 # Configuration
 APP_NAME="Lively"
 OUTPUT_DIR="${LIVELY_OUTPUT_DIR:-/private/tmp/LivelyOutput}"

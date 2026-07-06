@@ -38,15 +38,32 @@ import AVFoundation
 
 // MARK: - Video Thumbnail View
 
+@Observable
+@MainActor
+private final class ThumbnailLoader {
+    var image: NSImage?
+    var isLoading = true
+
+    func load(url: URL) async {
+        isLoading = true
+        image = await generateThumbnail(for: url)
+        isLoading = false
+    }
+
+    func reset() {
+        image = nil
+        isLoading = true
+    }
+}
+
 struct VideoThumbnailView: View {
     let url: URL
-    @State private var thumbnail: NSImage?
-    @State private var isLoading = true
+    @State private var loader = ThumbnailLoader()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
-            if let thumbnail {
+            if let thumbnail = loader.image {
                 Image(nsImage: thumbnail)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -58,7 +75,7 @@ struct VideoThumbnailView: View {
                         insertion: .opacity.combined(with: .offset(y: 4)),
                         removal: .opacity
                     ))
-            } else if isLoading {
+            } else if loader.isLoading {
                 RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
                     .fill(LivelyBrand.accent.opacity(0.72))
                     .frame(maxWidth: .infinity)
@@ -86,12 +103,9 @@ struct VideoThumbnailView: View {
                     .transition(.opacity)
             }
         }
-        .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: thumbnail != nil)
-        .animation(reduceMotion ? nil : LivelyBrand.Motion.fast, value: isLoading)
-        .task(id: url) {
-            isLoading = true
-            thumbnail = await generateThumbnail(for: url)
-            isLoading = false
-        }
+        .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: loader.image != nil)
+        .animation(reduceMotion ? nil : LivelyBrand.Motion.fast, value: loader.isLoading)
+        .onChange(of: url) { _, _ in loader.reset() }
+        .task(id: url) { await loader.load(url: url) }
     }
 }
