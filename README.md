@@ -375,7 +375,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 Built by **[@harshabala](https://github.com/harshabala)**.
 
-Designed and shipped with AI-assisted development workflows — multi-agent code review, security audit, motion design, and UI polish passes coordinated through Claude Code and Impeccable.
+Designed and shipped with AI-assisted development workflows.
 
 Questions or ideas → **[github.com/harshabala/Lively/issues](https://github.com/harshabala/Lively/issues)**
 
