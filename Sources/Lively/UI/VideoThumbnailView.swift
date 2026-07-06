@@ -11,29 +11,23 @@ import AVFoundation
         return cached
     }
 
-    let nsImage = await Task.detached { () -> NSImage? in
-        let hasAccess = url.startAccessingSecurityScopedResource()
-        defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
-        
-        let asset = AVURLAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 400, height: 240)
-        
-        do {
-            let (image, _) = try await generator.image(at: .init(seconds: 1, preferredTimescale: 600))
-            return NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
-        } catch {
-            LivelyLogger.videoPreview.error("Thumbnail generation failed: \(error.localizedDescription)")
-            return nil
-        }
-    }.value
-    
-    if let nsImage {
+    let hasAccess = url.startAccessingSecurityScopedResource()
+    defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
+
+    let asset = AVURLAsset(url: url)
+    let generator = AVAssetImageGenerator(asset: asset)
+    generator.appliesPreferredTrackTransform = true
+    generator.maximumSize = CGSize(width: 400, height: 240)
+
+    do {
+        let (image, _) = try await generator.image(at: .init(seconds: 1, preferredTimescale: 600))
+        let nsImage = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
         thumbnailCache.setObject(nsImage, forKey: url as NSURL)
+        return nsImage
+    } catch {
+        LivelyLogger.videoPreview.error("Thumbnail generation failed: \(error.localizedDescription)")
+        return nil
     }
-    
-    return nsImage
 }
 
 // MARK: - Video Thumbnail View
