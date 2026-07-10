@@ -7,6 +7,7 @@ public struct DisplaysView: View {
     @ObservedObject public var spaceMonitor: SpaceMonitor
     public let configStore: ConfigStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var displayedDays: Int = 0
 
     public init(spaceMonitor: SpaceMonitor, configStore: ConfigStore) {
         self.spaceMonitor = spaceMonitor
@@ -17,6 +18,11 @@ public struct DisplaysView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: LivelyBrand.Spacing.xl) {
                 screensSection
+                
+                Divider()
+                    .overlay(LivelyBrand.border.opacity(0.45))
+                
+                metricsFooter
             }
             .padding(.horizontal, LivelyBrand.Spacing.xl)
             .padding(.vertical, LivelyBrand.Spacing.xl)
@@ -84,9 +90,7 @@ public struct DisplaysView: View {
 
     private var detectingView: some View {
         HStack(spacing: LivelyBrand.Spacing.md) {
-            ProgressView()
-                .scaleEffect(0.75)
-                .tint(LivelyBrand.mutedForeground)
+            BreathingDotsView()
             Text("Detecting displays...")
                 .font(LivelyBrand.Typography.body)
                 .foregroundStyle(LivelyBrand.mutedForeground)
@@ -107,5 +111,48 @@ public struct DisplaysView: View {
         Label(title, systemImage: icon)
             .font(LivelyBrand.Typography.footnote.weight(.semibold))
             .foregroundStyle(LivelyBrand.mutedForeground)
+    }
+
+    private var metricsFooter: some View {
+        let target = AppMetrics.shared.daysWithWallpaperActive
+        return VStack(spacing: 2) {
+            HStack(spacing: 4) {
+                Text("Active")
+                    .font(LivelyBrand.Typography.caption)
+                    .foregroundStyle(LivelyBrand.mutedForeground)
+                // Spell: number roll-up — the count animates from 0 to the real value on appear
+                Text("\(displayedDays)")
+                    .font(LivelyBrand.Typography.caption.weight(.semibold))
+                    .foregroundStyle(LivelyBrand.primary)
+                    .contentTransition(.numericText(value: Double(displayedDays)))
+                    .monospacedDigit()
+                Text("days.")
+                    .font(LivelyBrand.Typography.caption)
+                    .foregroundStyle(LivelyBrand.mutedForeground)
+            }
+            Text("Counts days Lively was actively rendering. Stored only on this device. Never uploaded.")
+                .font(LivelyBrand.Typography.footnote)
+                .foregroundStyle(LivelyBrand.mutedForeground.opacity(0.7))
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .onAppear {
+            guard !reduceMotion, target > 0 else {
+                displayedDays = target
+                return
+            }
+            // Staggered tick-up: fast at first, eases into final value
+            let steps = min(target, 20)
+            let stepSize = max(1, target / steps)
+            for i in 0...steps {
+                let value = min(i * stepSize, target)
+                let delay = Double(i) * 0.04 + (i == steps ? 0 : 0)
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    withAnimation(.spring(duration: 0.2, bounce: 0.2)) {
+                        displayedDays = (i == steps) ? target : value
+                    }
+                }
+            }
+        }
     }
 }

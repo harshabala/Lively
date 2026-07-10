@@ -29,6 +29,10 @@ struct ScreenCardView: View {
 
     @State private var errorMessage: String?
     @State private var errorClearTask: Task<Void, Swift.Error>?
+    
+    @State private var showSuccessToast = false
+    @State private var toastTask: Task<Void, Swift.Error>?
+    @State private var auroraRotation: Double = 0
 
     private var config: SpaceConfig? { currentConfig }
 
@@ -87,6 +91,7 @@ struct ScreenCardView: View {
                     isTargeted: currentWallpaper.mode == .appearance ? $isTargetedLight : $isTargetedMain,
                     isValidating: currentWallpaper.mode == .appearance ? $isValidatingLight : $isValidatingMain,
                     onDrop: { url in
+                        let wasFirstTime = !AppMetrics.shared.isActivated
                         var updated = currentWallpaper
                         if updated.mode == .appearance {
                             updated.lightURL = url
@@ -94,6 +99,7 @@ struct ScreenCardView: View {
                             updated.staticURL = url
                         }
                         configStore.assign(dynamicWallpaper: updated, toSpaceKey: space.spaceKey)
+                        if wasFirstTime { showSuccessMessage() }
                     }
                 )
 
@@ -105,9 +111,11 @@ struct ScreenCardView: View {
                         isTargeted: $isTargetedDark,
                         isValidating: $isValidatingDark,
                         onDrop: { url in
+                            let wasFirstTime = !AppMetrics.shared.isActivated
                             var updated = currentWallpaper
                             updated.darkURL = url
                             configStore.assign(dynamicWallpaper: updated, toSpaceKey: space.spaceKey)
+                            if wasFirstTime { showSuccessMessage() }
                         }
                     )
                     .transition(modeTransition)
@@ -136,20 +144,46 @@ struct ScreenCardView: View {
         .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: currentWallpaper.mode)
         .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: config != nil)
         .overlay(alignment: .top) {
-            if let error = errorMessage {
-                Text(error)
+            VStack(spacing: 8) {
+                if let error = errorMessage {
+                    Text(error)
+                        .font(LivelyBrand.Typography.footnote.weight(.medium))
+                        .foregroundStyle(LivelyBrand.onDestructive)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(LivelyBrand.destructive.opacity(0.92))
+                        .clipShape(.rect(cornerRadius: LivelyBrand.Radius.sm))
+                        .padding(.top, LivelyBrand.Spacing.sm)
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .top).combined(with: .opacity),
+                            removal: .opacity
+                        ))
+                        .zIndex(10)
+                }
+                
+                if showSuccessToast {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(LivelyBrand.primary)
+                        Text("Playing on this Space. Switch Spaces to set another.")
+                    }
                     .font(LivelyBrand.Typography.footnote.weight(.medium))
-                    .foregroundStyle(LivelyBrand.onDestructive)
+                    .foregroundStyle(LivelyBrand.foreground)
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(LivelyBrand.destructive.opacity(0.92))
+                    .padding(.vertical, 8)
+                    .background(LivelyBrand.accent.opacity(0.95))
                     .clipShape(.rect(cornerRadius: LivelyBrand.Radius.sm))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
+                            .strokeBorder(LivelyBrand.border.opacity(0.45))
+                    )
                     .padding(.top, LivelyBrand.Spacing.sm)
                     .transition(.asymmetric(
                         insertion: .move(edge: .top).combined(with: .opacity),
                         removal: .opacity
                     ))
-                    .zIndex(10)
+                    .zIndex(11)
+                }
             }
         }
         .confirmationDialog(
@@ -420,17 +454,42 @@ struct ScreenCardView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 80)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
-                            .strokeBorder(
-                                style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
-                            )
-                            .foregroundStyle(
-                                isTargeted.wrappedValue
-                                    ? LivelyBrand.primary.opacity(0.68)
-                                    : LivelyBrand.border.opacity(0.52)
-                            )
-                    )
+                    .overlay {
+                        // Spell: Aurora rotating gradient border when targeted
+                        if isTargeted.wrappedValue && !reduceMotion {
+                            RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
+                                .stroke(
+                                    AngularGradient(
+                                        colors: [
+                                            LivelyBrand.primary,
+                                            LivelyBrand.primarySoft,
+                                            LivelyBrand.primary.opacity(0.4),
+                                            LivelyBrand.primarySoft,
+                                            LivelyBrand.primary
+                                        ],
+                                        center: .center,
+                                        angle: .degrees(auroraRotation)
+                                    ),
+                                    lineWidth: 2
+                                )
+                                .onAppear {
+                                    withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
+                                        auroraRotation = 360
+                                    }
+                                }
+                                .onDisappear { auroraRotation = 0 }
+                        } else {
+                            RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
+                                .strokeBorder(
+                                    style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
+                                )
+                                .foregroundStyle(
+                                    isTargeted.wrappedValue
+                                        ? LivelyBrand.primary.opacity(0.68)
+                                        : LivelyBrand.border.opacity(0.52)
+                                )
+                        }
+                    }
                 }
             }
             .padding(LivelyBrand.Spacing.md)
@@ -470,6 +529,16 @@ struct ScreenCardView: View {
     }
 
     // MARK: - Interactions
+
+    private func showSuccessMessage() {
+        showSuccessToast = true
+        AccessibilityNotification.Announcement("Playing on this Space. Switch Spaces to set another.").post()
+        toastTask?.cancel()
+        toastTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            if !Task.isCancelled { showSuccessToast = false }
+        }
+    }
 
     private func showError(_ message: String) {
         errorMessage = message

@@ -15,6 +15,19 @@ Lively is a native macOS menu-bar utility that plays looping, hardware-accelerat
 
 ---
 
+## 🙋 For Users
+- [Download & install](#download--install)
+- [How to use](#how-to-use)
+- [Features](#features)
+- [Limitations](#limitations)
+
+## 👩‍💻 For Developers
+- [Building](#building)
+- [Architecture](#architecture)
+- [Entitlements and sandboxing](#entitlements-and-sandboxing)
+
+---
+
 ## Download & install
 
 **Latest release: [v1.0.0](https://github.com/harshabala/Lively/releases/latest)** · [All releases](https://github.com/harshabala/Lively/releases)
