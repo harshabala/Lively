@@ -207,7 +207,6 @@ struct ScreenCardView: View {
                 }
             }
         }
-        }
         .onReceive(wallpaperController.playbackErrors) { (targetSpaceKey, message) in
             if targetSpaceKey == space.spaceKey {
                 showError("Playback failed: \(message)")
@@ -641,7 +640,7 @@ private struct DropZoneView: View {
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
                             .background(.black.opacity(0.55))
-                            .clipShape(.rect(cornerRadius: LivelyBrand.Radius.xs))
+                            .clipShape(.rect(cornerRadius: LivelyBrand.Radius.sm))
                             .padding(6)
                     }
                 
