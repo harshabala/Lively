@@ -16,7 +16,6 @@ struct ScreenCardView: View {
     @State private var isTargetedMain = false
     @State private var isTargetedLight = false
     @State private var isTargetedDark = false
-    @State private var showRemoveConfirm = false
     @State private var isValidatingMain = false
     @State private var isValidatingLight = false
     @State private var isValidatingDark = false
@@ -100,6 +99,19 @@ struct ScreenCardView: View {
                         }
                         configStore.assign(dynamicWallpaper: updated, toSpaceKey: space.spaceKey)
                         if wasFirstTime { showSuccessMessage() }
+                    },
+                    onClear: {
+                        var updated = currentWallpaper
+                        if updated.mode == .appearance {
+                            updated.lightURL = nil
+                            if updated.darkURL == nil {
+                                configStore.remove(spaceKey: space.spaceKey)
+                            } else {
+                                configStore.assign(dynamicWallpaper: updated, toSpaceKey: space.spaceKey)
+                            }
+                        } else {
+                            configStore.remove(spaceKey: space.spaceKey)
+                        }
                     }
                 )
 
@@ -116,6 +128,15 @@ struct ScreenCardView: View {
                             updated.darkURL = url
                             configStore.assign(dynamicWallpaper: updated, toSpaceKey: space.spaceKey)
                             if wasFirstTime { showSuccessMessage() }
+                        },
+                        onClear: {
+                            var updated = currentWallpaper
+                            updated.darkURL = nil
+                            if updated.lightURL == nil {
+                                configStore.remove(spaceKey: space.spaceKey)
+                            } else {
+                                configStore.assign(dynamicWallpaper: updated, toSpaceKey: space.spaceKey)
+                            }
                         }
                     )
                     .transition(modeTransition)
@@ -186,17 +207,6 @@ struct ScreenCardView: View {
                 }
             }
         }
-        .confirmationDialog(
-            "Remove wallpaper?",
-            isPresented: $showRemoveConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Remove", role: .destructive) {
-                configStore.remove(spaceKey: space.spaceKey)
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This removes the assigned video from \(space.displayName).")
         }
         .onReceive(wallpaperController.playbackErrors) { (targetSpaceKey, message) in
             if targetSpaceKey == space.spaceKey {
@@ -245,7 +255,7 @@ struct ScreenCardView: View {
 
             if config != nil {
                 Button {
-                    showRemoveConfirm = true
+                    configStore.remove(spaceKey: space.spaceKey)
                 } label: {
                     Label("Remove wallpaper", systemImage: "trash")
                         .labelStyle(.iconOnly)
@@ -395,7 +405,8 @@ struct ScreenCardView: View {
         url: URL?,
         isTargeted: Binding<Bool>,
         isValidating: Binding<Bool>,
-        onDrop: @escaping @MainActor (URL) -> Void
+        onDrop: @escaping @MainActor (URL) -> Void,
+        onClear: @escaping @MainActor () -> Void
     ) -> some View {
         DropZoneView(
             title: title,
@@ -410,7 +421,8 @@ struct ScreenCardView: View {
             },
             onError: { message in
                 showError(message)
-            }
+            },
+            onClear: onClear
         )
     }
 
@@ -547,21 +559,52 @@ private struct DropZoneView: View {
     let onFilePick: @MainActor () -> Void
     let onURLDrop: @MainActor (URL) -> Void
     let onError: @MainActor (String) -> Void
+    let onClear: @MainActor () -> Void
 
     @State private var auroraRotation: Double = 0
 
     var body: some View {
-        Button {
-            onFilePick()
-        } label: {
-            VStack(spacing: 8) {
-                if isValidating.wrappedValue {
-                    ProgressView()
-                        .controlSize(.small)
-                        .frame(maxWidth: .infinity, minHeight: 80)
-                } else if let url = url {
-                    VideoThumbnailView(url: url)
-
+        VStack(spacing: 0) {
+            if isValidating.wrappedValue {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(maxWidth: .infinity, minHeight: 80)
+            } else if let url = url {
+                // Video is set: show thumbnail with Change on click, and a dedicated Clear button
+                VStack(spacing: 8) {
+                    ZStack(alignment: .topTrailing) {
+                        VideoThumbnailView(url: url)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                onFilePick()
+                            }
+                            .overlay(alignment: .bottomLeading) {
+                                Text("Click to change")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(.black.opacity(0.55))
+                                    .clipShape(.rect(cornerRadius: LivelyBrand.Radius.xs))
+                                    .padding(6)
+                            }
+                        
+                        Button {
+                            onClear()
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, .red.opacity(0.85))
+                                .font(.system(size: 20))
+                                .padding(6)
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .help("Clear this video")
+                    }
+                    .frame(height: 90)
+                    .clipShape(.rect(cornerRadius: LivelyBrand.Radius.sm))
+                    
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(LivelyBrand.primary)
@@ -579,7 +622,12 @@ private struct DropZoneView: View {
                             .font(LivelyBrand.Typography.caption)
                             .foregroundStyle(LivelyBrand.mutedForeground)
                     }
-                } else {
+                }
+            } else {
+                // No video is set: whole area is a drop target / clickable button
+                Button {
+                    onFilePick()
+                } label: {
                     VStack(spacing: 6) {
                         Group {
                             if !reduceMotion {
@@ -612,7 +660,6 @@ private struct DropZoneView: View {
                     .frame(minHeight: 80)
                     .overlay {
                         // Spell: Aurora rotating gradient border when targeted.
-                        // auroraRotation is local to this struct instance (C-1 fix).
                         if isTargeted.wrappedValue && !reduceMotion {
                             RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
                                 .stroke(
@@ -646,27 +693,27 @@ private struct DropZoneView: View {
                         }
                     }
                 }
+                .buttonStyle(.plain)
             }
-            .padding(LivelyBrand.Spacing.md)
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: 60)
-            .background(
-                RoundedRectangle(cornerRadius: LivelyBrand.Radius.md)
-                    .fill(
-                        isTargeted.wrappedValue
-                            ? LivelyBrand.primary.opacity(0.12)
-                            : LivelyBrand.accent.opacity(0.35)
-                    )
-            )
         }
-        .buttonStyle(.plain)
+        .padding(LivelyBrand.Spacing.md)
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 60)
+        .background(
+            RoundedRectangle(cornerRadius: LivelyBrand.Radius.md)
+                .fill(
+                    isTargeted.wrappedValue
+                        ? LivelyBrand.primary.opacity(0.12)
+                        : LivelyBrand.accent.opacity(0.35)
+                )
+        )
         .scaleEffect(isTargeted.wrappedValue ? 1.03 : 1.0)
         .animation(reduceMotion ? nil : LivelyBrand.Motion.dropTarget, value: isTargeted.wrappedValue)
         .accessibilityLabel(
             url.map { "\(title.isEmpty ? "Wallpaper" : title), \($0.lastPathComponent)" }
                 ?? "\(title.isEmpty ? "Wallpaper" : title), choose video"
         )
-        .accessibilityHint("Drag and drop a video, or click to browse")
+        .accessibilityHint(url == nil ? "Drag and drop a video, or click to browse" : "Click to change video, or click the clear button in the top-right corner to remove it")
         .onDrop(of: [.fileURL], isTargeted: isTargeted) { providers in
             guard let provider = providers.first else { return false }
             provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, error in
