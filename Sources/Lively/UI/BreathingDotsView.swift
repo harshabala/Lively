@@ -15,8 +15,8 @@ struct BreathingDotsView: View {
                 Circle()
                     .fill(LivelyBrand.primary)
                     .frame(width: dotSize, height: dotSize)
-                    .scaleEffect(dotIsActive(index) ? 1.0 : 0.55)
-                    .opacity(dotIsActive(index) ? 0.85 : 0.25)
+                    .scaleEffect(phase ? 1.0 : 0.55)
+                    .opacity(phase ? 0.85 : 0.25)
                     .animation(
                         reduceMotion ? nil :
                             .easeInOut(duration: 0.55)
@@ -31,7 +31,4 @@ struct BreathingDotsView: View {
         .accessibilityHidden(true)
     }
 
-    private func dotIsActive(_ index: Int) -> Bool {
-        phase
-    }
 }

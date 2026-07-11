@@ -115,44 +115,55 @@ public struct DisplaysView: View {
 
     private var metricsFooter: some View {
         let target = AppMetrics.shared.daysWithWallpaperActive
-        return VStack(spacing: 2) {
-            HStack(spacing: 4) {
-                Text("Active")
-                    .font(LivelyBrand.Typography.caption)
-                    .foregroundStyle(LivelyBrand.mutedForeground)
-                // Spell: number roll-up — the count animates from 0 to the real value on appear
-                Text("\(displayedDays)")
-                    .font(LivelyBrand.Typography.caption.weight(.semibold))
-                    .foregroundStyle(LivelyBrand.primary)
-                    .contentTransition(.numericText(value: Double(displayedDays)))
-                    .monospacedDigit()
-                Text("days.")
-                    .font(LivelyBrand.Typography.caption)
-                    .foregroundStyle(LivelyBrand.mutedForeground)
+        // M-4: Hide when no days recorded yet (fresh install)
+        guard target > 0 else { return AnyView(EmptyView()) }
+        return AnyView(
+            VStack(spacing: 2) {
+                HStack(spacing: 4) {
+                    Text("Active")
+                        .font(LivelyBrand.Typography.caption)
+                        .foregroundStyle(LivelyBrand.mutedForeground)
+                    // Spell: number roll-up — count animates from 0 to real value on appear
+                    Text("\(displayedDays)")
+                        .font(LivelyBrand.Typography.caption.weight(.semibold))
+                        .foregroundStyle(LivelyBrand.primary)
+                        .contentTransition(.numericText(value: Double(displayedDays)))
+                        .monospacedDigit()
+                    Text("days.")
+                        .font(LivelyBrand.Typography.caption)
+                        .foregroundStyle(LivelyBrand.mutedForeground)
+                }
+                // C-3: Split into two lines; together they read the full spec copy:
+                // "Counts days Lively was actively rendering."
+                // "Stored only on this device. Never uploaded."
+                Text("Counts days Lively was actively rendering.")
+                    .font(LivelyBrand.Typography.footnote)
+                    .foregroundStyle(LivelyBrand.mutedForeground.opacity(0.7))
+                    .multilineTextAlignment(.center)
+                Text("Stored only on this device. Never uploaded.")
+                    .font(LivelyBrand.Typography.footnote)
+                    .foregroundStyle(LivelyBrand.mutedForeground.opacity(0.7))
+                    .multilineTextAlignment(.center)
             }
-            Text("Counts days Lively was actively rendering. Stored only on this device. Never uploaded.")
-                .font(LivelyBrand.Typography.footnote)
-                .foregroundStyle(LivelyBrand.mutedForeground.opacity(0.7))
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-        .onAppear {
-            guard !reduceMotion, target > 0 else {
-                displayedDays = target
-                return
-            }
-            // Staggered tick-up: fast at first, eases into final value
-            let steps = min(target, 20)
-            let stepSize = max(1, target / steps)
-            for i in 0...steps {
-                let value = min(i * stepSize, target)
-                let delay = Double(i) * 0.04 + (i == steps ? 0 : 0)
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    withAnimation(.spring(duration: 0.2, bounce: 0.2)) {
-                        displayedDays = (i == steps) ? target : value
+            .frame(maxWidth: .infinity, alignment: .center)
+            .onAppear {
+                guard !reduceMotion else {
+                    displayedDays = target
+                    return
+                }
+                // I-4: Use Task (Swift Concurrency) instead of DispatchQueue.main.asyncAfter
+                // so iterations are automatically cancelled when the view disappears.
+                Task { @MainActor in
+                    let steps = min(target, 20)
+                    let stepSize = max(1, target / steps)
+                    for i in 0...steps {
+                        try? await Task.sleep(for: .milliseconds(40))  // M-1: 0.04s, no dead ternary
+                        withAnimation(.spring(duration: 0.2, bounce: 0.2)) {
+                            displayedDays = (i == steps) ? target : min(i * stepSize, target)
+                        }
                     }
                 }
             }
-        }
+        )
     }
 }

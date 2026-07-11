@@ -32,7 +32,7 @@ struct ScreenCardView: View {
     
     @State private var showSuccessToast = false
     @State private var toastTask: Task<Void, Swift.Error>?
-    @State private var auroraRotation: Double = 0
+    // auroraRotation is owned per-DropZoneView instance (see C-1 fix below)
 
     private var config: SpaceConfig? { currentConfig }
 
@@ -387,6 +387,8 @@ struct ScreenCardView: View {
         )
     }
 
+    // C-1 fix: DropZoneView owns its own @State so each instance has
+    // independent auroraRotation — no shared state glitch in .appearance mode.
     private func dropZone(
         title: String,
         icon: String,
@@ -395,137 +397,20 @@ struct ScreenCardView: View {
         isValidating: Binding<Bool>,
         onDrop: @escaping @MainActor (URL) -> Void
     ) -> some View {
-        Button {
-            openFilePicker(isValidating: isValidating, onPick: onDrop)
-        } label: {
-            VStack(spacing: 8) {
-                if isValidating.wrappedValue {
-                    ProgressView()
-                        .controlSize(.small)
-                        .frame(maxWidth: .infinity, minHeight: 80)
-                } else if let url = url {
-                    VideoThumbnailView(url: url)
-
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(LivelyBrand.primary)
-                            .font(LivelyBrand.Typography.caption)
-                        Text(url.lastPathComponent)
-                            .font(LivelyBrand.Typography.body.weight(.medium))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    .padding(.horizontal, LivelyBrand.Spacing.sm)
-                    .padding(.vertical, LivelyBrand.Spacing.xs)
-
-                    if !title.isEmpty {
-                        Text(title)
-                            .font(LivelyBrand.Typography.caption)
-                            .foregroundStyle(LivelyBrand.mutedForeground)
-                    }
-                } else {
-                    VStack(spacing: 6) {
-                        Group {
-                            if !reduceMotion {
-                                Image(systemName: isTargeted.wrappedValue ? "arrow.down.circle.fill" : icon)
-                                    .symbolEffect(.pulse, value: isTargeted.wrappedValue)
-                                    .contentTransition(.symbolEffect(.replace))
-                            } else {
-                                Image(systemName: isTargeted.wrappedValue ? "arrow.down.circle.fill" : icon)
-                            }
-                        }
-                        .font(.system(size: 28))
-                        .foregroundStyle(isTargeted.wrappedValue ? LivelyBrand.primary : LivelyBrand.mutedForeground)
-
-                        if isTargeted.wrappedValue {
-                            Text("Drop here")
-                                .font(LivelyBrand.Typography.caption)
-                                .foregroundStyle(LivelyBrand.foreground)
-                                .transition(.opacity)
-                        } else if title.isEmpty {
-                            Text("Drop a video, or click to browse")
-                                .font(LivelyBrand.Typography.caption)
-                                .foregroundStyle(LivelyBrand.mutedForeground)
-                        } else {
-                            Text(title)
-                                .font(LivelyBrand.Typography.caption)
-                                .foregroundStyle(LivelyBrand.mutedForeground)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 80)
-                    .overlay {
-                        // Spell: Aurora rotating gradient border when targeted
-                        if isTargeted.wrappedValue && !reduceMotion {
-                            RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
-                                .stroke(
-                                    AngularGradient(
-                                        colors: [
-                                            LivelyBrand.primary,
-                                            LivelyBrand.primarySoft,
-                                            LivelyBrand.primary.opacity(0.4),
-                                            LivelyBrand.primarySoft,
-                                            LivelyBrand.primary
-                                        ],
-                                        center: .center,
-                                        angle: .degrees(auroraRotation)
-                                    ),
-                                    lineWidth: 2
-                                )
-                                .onAppear {
-                                    withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
-                                        auroraRotation = 360
-                                    }
-                                }
-                                .onDisappear { auroraRotation = 0 }
-                        } else {
-                            RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
-                                .strokeBorder(
-                                    style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
-                                )
-                                .foregroundStyle(
-                                    isTargeted.wrappedValue
-                                        ? LivelyBrand.primary.opacity(0.68)
-                                        : LivelyBrand.border.opacity(0.52)
-                                )
-                        }
-                    }
-                }
-            }
-            .padding(LivelyBrand.Spacing.md)
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: 60)
-            .background(
-                RoundedRectangle(cornerRadius: LivelyBrand.Radius.md)
-                    .fill(
-                        isTargeted.wrappedValue
-                            ? LivelyBrand.primary.opacity(0.12)
-                            : LivelyBrand.accent.opacity(0.35)
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-        .scaleEffect(isTargeted.wrappedValue ? 1.03 : 1.0)
-        .animation(reduceMotion ? nil : LivelyBrand.Motion.dropTarget, value: isTargeted.wrappedValue)
-        .accessibilityLabel(
-            url.map { "\(title.isEmpty ? "Wallpaper" : title), \($0.lastPathComponent)" }
-                ?? "\(title.isEmpty ? "Wallpaper" : title), choose video"
-        )
-        .accessibilityHint("Drag and drop a video, or click to browse")
-        .onDrop(of: [.fileURL], isTargeted: isTargeted) { providers in
-            guard let provider = providers.first else { return false }
-            provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
-                guard
-                    let data = item as? Data,
-                    let url = URL(dataRepresentation: data, relativeTo: nil)
-                else { return }
-
+        DropZoneView(
+            title: title,
+            icon: icon,
+            url: url,
+            isTargeted: isTargeted,
+            isValidating: isValidating,
+            reduceMotion: reduceMotion,
+            onFilePick: { openFilePicker(isValidating: isValidating, onPick: onDrop) },
+            onURLDrop: { dropped in
                 Task { @MainActor in
-                    handleURLSelection(url, isValidating: isValidating, onAccept: onDrop)
+                    handleURLSelection(dropped, isValidating: isValidating, onAccept: onDrop)
                 }
             }
-            return true
-        }
+        )
     }
 
     // MARK: - Interactions
@@ -535,8 +420,12 @@ struct ScreenCardView: View {
         AccessibilityNotification.Announcement("Playing on this Space. Switch Spaces to set another.").post()
         toastTask?.cancel()
         toastTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(3))
-            if !Task.isCancelled { showSuccessToast = false }
+            do {
+                try await Task.sleep(for: .seconds(3))
+                showSuccessToast = false
+            } catch {
+                // Task was cancelled — do not update state
+            }
         }
     }
 
@@ -545,8 +434,12 @@ struct ScreenCardView: View {
         AccessibilityNotification.Announcement(message).post()
         errorClearTask?.cancel()
         errorClearTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(5))
-            if !Task.isCancelled { errorMessage = nil }
+            do {
+                try await Task.sleep(for: .seconds(5))
+                errorMessage = nil
+            } catch {
+                // Task was cancelled — do not update state
+            }
         }
     }
 
@@ -634,5 +527,154 @@ private enum VideoURLValidation {
         }
 
         return .valid(url)
+    }
+}
+
+// MARK: - Drop Zone View (C-1: each instance owns its own auroraRotation)
+
+/// Self-contained drop zone. By being a separate `View` struct, each instance
+/// gets its own `@State private var auroraRotation`, preventing the shared-state
+/// glitch that occurred in `.appearance` mode when one zone's `.onDisappear`
+/// reset the other zone's animation.
+private struct DropZoneView: View {
+    let title: String
+    let icon: String
+    let url: URL?
+    let isTargeted: Binding<Bool>
+    let isValidating: Binding<Bool>
+    let reduceMotion: Bool
+    let onFilePick: () -> Void
+    let onURLDrop: (URL) -> Void
+
+    @State private var auroraRotation: Double = 0
+
+    var body: some View {
+        Button {
+            onFilePick()
+        } label: {
+            VStack(spacing: 8) {
+                if isValidating.wrappedValue {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(maxWidth: .infinity, minHeight: 80)
+                } else if let url = url {
+                    VideoThumbnailView(url: url)
+
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(LivelyBrand.primary)
+                            .font(LivelyBrand.Typography.caption)
+                        Text(url.lastPathComponent)
+                            .font(LivelyBrand.Typography.body.weight(.medium))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .padding(.horizontal, LivelyBrand.Spacing.sm)
+                    .padding(.vertical, LivelyBrand.Spacing.xs)
+
+                    if !title.isEmpty {
+                        Text(title)
+                            .font(LivelyBrand.Typography.caption)
+                            .foregroundStyle(LivelyBrand.mutedForeground)
+                    }
+                } else {
+                    VStack(spacing: 6) {
+                        Group {
+                            if !reduceMotion {
+                                Image(systemName: isTargeted.wrappedValue ? "arrow.down.circle.fill" : icon)
+                                    .symbolEffect(.pulse, value: isTargeted.wrappedValue)
+                                    .contentTransition(.symbolEffect(.replace))
+                            } else {
+                                Image(systemName: isTargeted.wrappedValue ? "arrow.down.circle.fill" : icon)
+                            }
+                        }
+                        .font(.system(size: 28))
+                        .foregroundStyle(isTargeted.wrappedValue ? LivelyBrand.primary : LivelyBrand.mutedForeground)
+
+                        if isTargeted.wrappedValue {
+                            Text("Drop here")
+                                .font(LivelyBrand.Typography.caption)
+                                .foregroundStyle(LivelyBrand.foreground)
+                                .transition(.opacity)
+                        } else if title.isEmpty {
+                            Text("Drop a video, or click to browse")
+                                .font(LivelyBrand.Typography.caption)
+                                .foregroundStyle(LivelyBrand.mutedForeground)
+                        } else {
+                            Text(title)
+                                .font(LivelyBrand.Typography.caption)
+                                .foregroundStyle(LivelyBrand.mutedForeground)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 80)
+                    .overlay {
+                        // Spell: Aurora rotating gradient border when targeted.
+                        // auroraRotation is local to this struct instance (C-1 fix).
+                        if isTargeted.wrappedValue && !reduceMotion {
+                            RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
+                                .stroke(
+                                    AngularGradient(
+                                        colors: [
+                                            LivelyBrand.primary,
+                                            LivelyBrand.primarySoft,
+                                            LivelyBrand.primary.opacity(0.4),
+                                            LivelyBrand.primarySoft,
+                                            LivelyBrand.primary
+                                        ],
+                                        center: .center,
+                                        angle: .degrees(auroraRotation)
+                                    ),
+                                    lineWidth: 2
+                                )
+                                .onAppear {
+                                    withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
+                                        auroraRotation = 360
+                                    }
+                                }
+                                .onDisappear { auroraRotation = 0 }
+                        } else {
+                            RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
+                                .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                                .foregroundStyle(
+                                    isTargeted.wrappedValue
+                                        ? LivelyBrand.primary.opacity(0.68)
+                                        : LivelyBrand.border.opacity(0.52)
+                                )
+                        }
+                    }
+                }
+            }
+            .padding(LivelyBrand.Spacing.md)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 60)
+            .background(
+                RoundedRectangle(cornerRadius: LivelyBrand.Radius.md)
+                    .fill(
+                        isTargeted.wrappedValue
+                            ? LivelyBrand.primary.opacity(0.12)
+                            : LivelyBrand.accent.opacity(0.35)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(isTargeted.wrappedValue ? 1.03 : 1.0)
+        .animation(reduceMotion ? nil : LivelyBrand.Motion.dropTarget, value: isTargeted.wrappedValue)
+        .accessibilityLabel(
+            url.map { "\(title.isEmpty ? "Wallpaper" : title), \($0.lastPathComponent)" }
+                ?? "\(title.isEmpty ? "Wallpaper" : title), choose video"
+        )
+        .accessibilityHint("Drag and drop a video, or click to browse")
+        .onDrop(of: [.fileURL], isTargeted: isTargeted) { providers in
+            guard let provider = providers.first else { return false }
+            provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
+                guard
+                    let data = item as? Data,
+                    let url = URL(dataRepresentation: data, relativeTo: nil)
+                else { return }
+                onURLDrop(url)
+            }
+            return true
+        }
     }
 }

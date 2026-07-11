@@ -50,10 +50,10 @@ public struct SettingsContainerView: View {
             if wallpaperController.isThrottled {
                 HStack(spacing: LivelyBrand.Spacing.sm) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
+                        .foregroundStyle(.orange)  // M-2: was deprecated .foregroundColor
                     Text("Mac running hot. Lively paused to save battery.")
                         .font(LivelyBrand.Typography.caption)
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)  // M-2: was deprecated .foregroundColor
                 }
                 .padding(.vertical, LivelyBrand.Spacing.sm)
                 .padding(.horizontal, LivelyBrand.Spacing.md)
