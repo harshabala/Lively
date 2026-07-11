@@ -63,6 +63,8 @@ public class ConfigStore: ObservableObject {
 
     /// Assigns a dynamic wallpaper configuration to a space.
     public func assign(dynamicWallpaper: DynamicWallpaper, toSpaceKey key: String) {
+        AppMetrics.shared.recordWallpaperApplied()
+        
         var bookmarks: [String: Data] = [:]
 
         func bookmark(for url: URL?, key: String) -> Data? {

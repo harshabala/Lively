@@ -260,6 +260,7 @@ public final class WallpaperController: ObservableObject {
     // MARK: - Public State
 
     @Published public private(set) var isPaused = false
+    @Published public private(set) var isThrottled = false
     
     /// Bubbles up playback errors (spaceKey, Error message) to the UI
     public let playbackErrors = PassthroughSubject<(String, String), Never>()
@@ -273,6 +274,7 @@ public final class WallpaperController: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     
     private var appearanceObserver: AnyCancellable?
+    private var thermalStateObserver: AnyCancellable?
 
     // MARK: - Init
 
@@ -281,8 +283,13 @@ public final class WallpaperController: ObservableObject {
         self.configStore = configStore
         self.bookmarkManager = BookmarkManager(configStore: configStore)
         self.sessionManager = WallpaperSessionManager()
+        
+        let state = ProcessInfo.processInfo.thermalState
+        self.isThrottled = state == .serious || state == .critical
+        
         bind()
         setupAppearanceObserver()
+        setupThermalStateObserver()
     }
 
     // MARK: - Public Controls
@@ -293,12 +300,18 @@ public final class WallpaperController: ObservableObject {
         sessionManager.tearDownAll(bookmarkManager: bookmarkManager)
         appearanceObserver?.cancel()
         appearanceObserver = nil
+        thermalStateObserver?.cancel()
+        thermalStateObserver = nil
         cancellables.removeAll()
     }
 
     public func togglePause() {
         isPaused.toggle()
-        if isPaused {
+        applyPlaybackState()
+    }
+
+    private func applyPlaybackState() {
+        if isPaused || isThrottled {
             sessionManager.allSessions.values.forEach { $0.pause() }
         } else {
             // Re-sync rather than just resuming, so any config or space changes
@@ -337,6 +350,20 @@ public final class WallpaperController: ObservableObject {
                 self?.spaceMonitor.refresh()
             }
     }
+
+    private func setupThermalStateObserver() {
+        thermalStateObserver = NotificationCenter.default.publisher(for: ProcessInfo.thermalStateDidChangeNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                let state = ProcessInfo.processInfo.thermalState
+                let shouldThrottle = state == .serious || state == .critical
+                if self.isThrottled != shouldThrottle {
+                    self.isThrottled = shouldThrottle
+                    self.applyPlaybackState()
+                }
+            }
+    }
     
     // MARK: - Security-Scoped Access (Balanced)
     // MARK: - Synchronization
@@ -350,7 +377,7 @@ public final class WallpaperController: ObservableObject {
             appearance: appearance,
             configStore: configStore,
             bookmarkManager: bookmarkManager,
-            isPaused: isPaused,
+            isPaused: isPaused || isThrottled,
             onPlaybackError: { [weak self] spaceKey, message in
                 Task { @MainActor in
                     self?.playbackErrors.send((spaceKey, message))

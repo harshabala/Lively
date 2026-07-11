@@ -23,7 +23,7 @@ struct PillTabBar<Selection: Hashable>: View {
     private func tabButton(_ label: String, value: Selection, index: Int, total: Int) -> some View {
         let isSelected = selection == value
         return Button {
-            withAnimation(reduceMotion ? nil : LivelyBrand.Motion.fast) { selection = value }
+            withAnimation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.35)) { selection = value }
         } label: {
             Text(label)
                 .font(LivelyBrand.Typography.caption.weight(isSelected ? .semibold : .regular))
@@ -40,6 +40,13 @@ struct PillTabBar<Selection: Hashable>: View {
                                     .strokeBorder(LivelyBrand.border.opacity(0.45))
                             )
                             .matchedGeometryEffect(id: "pill", in: tabIndicator)
+                            // Spell: soft teal glow bloom under the active pill
+                            .shadow(
+                                color: LivelyBrand.primary.opacity(reduceMotion ? 0 : 0.35),
+                                radius: 8,
+                                x: 0,
+                                y: 2
+                            )
                     }
                 }
         }

@@ -47,6 +47,20 @@ public struct SettingsContainerView: View {
             Divider()
                 .overlay(LivelyBrand.border.opacity(0.45))
             
+            if wallpaperController.isThrottled {
+                HStack(spacing: LivelyBrand.Spacing.sm) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)  // M-2: was deprecated .foregroundColor
+                    Text("Mac running hot. Lively paused to save battery.")
+                        .font(LivelyBrand.Typography.caption)
+                        .foregroundStyle(.primary)  // M-2: was deprecated .foregroundColor
+                }
+                .padding(.vertical, LivelyBrand.Spacing.sm)
+                .padding(.horizontal, LivelyBrand.Spacing.md)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.15))
+            }
+            
             ZStack {
                 switch selectedTab {
                 case .displays:
