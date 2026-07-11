@@ -7,7 +7,7 @@ cask "lively" do
   desc "Native video wallpapers for every macOS Space and display"
   homepage "https://github.com/harshabala/Lively"
 
-  depends_on macos: ">= :sonoma"
+  depends_on macos: :sonoma
 
   app "Lively.app"
 
