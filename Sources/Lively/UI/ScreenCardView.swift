@@ -475,6 +475,7 @@ struct ScreenCardView: View {
         }
     }
 
+    @MainActor
     private func openFilePicker(
         isValidating: Binding<Bool>,
         onPick: @escaping @MainActor (URL) -> Void
@@ -566,134 +567,11 @@ private struct DropZoneView: View {
     var body: some View {
         VStack(spacing: 0) {
             if isValidating.wrappedValue {
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(maxWidth: .infinity, minHeight: 80)
+                progressView
             } else if let url = url {
-                // Video is set: show thumbnail with Change on click, and a dedicated Clear button
-                VStack(spacing: 8) {
-                    ZStack(alignment: .topTrailing) {
-                        VideoThumbnailView(url: url)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                onFilePick()
-                            }
-                            .overlay(alignment: .bottomLeading) {
-                                Text("Click to change")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                                    .background(.black.opacity(0.55))
-                                    .clipShape(.rect(cornerRadius: LivelyBrand.Radius.xs))
-                                    .padding(6)
-                            }
-                        
-                        Button {
-                            onClear()
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .symbolRenderingMode(.palette)
-                                .foregroundStyle(.white, .red.opacity(0.85))
-                                .font(.system(size: 20))
-                                .padding(6)
-                                .contentShape(Circle())
-                        }
-                        .buttonStyle(.plain)
-                        .help("Clear this video")
-                    }
-                    .frame(height: 90)
-                    .clipShape(.rect(cornerRadius: LivelyBrand.Radius.sm))
-                    
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(LivelyBrand.primary)
-                            .font(LivelyBrand.Typography.caption)
-                        Text(url.lastPathComponent)
-                            .font(LivelyBrand.Typography.body.weight(.medium))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    .padding(.horizontal, LivelyBrand.Spacing.sm)
-                    .padding(.vertical, LivelyBrand.Spacing.xs)
-
-                    if !title.isEmpty {
-                        Text(title)
-                            .font(LivelyBrand.Typography.caption)
-                            .foregroundStyle(LivelyBrand.mutedForeground)
-                    }
-                }
+                activeVideoView(url: url)
             } else {
-                // No video is set: whole area is a drop target / clickable button
-                Button {
-                    onFilePick()
-                } label: {
-                    VStack(spacing: 6) {
-                        Group {
-                            if !reduceMotion {
-                                Image(systemName: isTargeted.wrappedValue ? "arrow.down.circle.fill" : icon)
-                                    .symbolEffect(.pulse, value: isTargeted.wrappedValue)
-                                    .contentTransition(.symbolEffect(.replace))
-                            } else {
-                                Image(systemName: isTargeted.wrappedValue ? "arrow.down.circle.fill" : icon)
-                            }
-                        }
-                        .font(.system(size: 28))
-                        .foregroundStyle(isTargeted.wrappedValue ? LivelyBrand.primary : LivelyBrand.mutedForeground)
-
-                        if isTargeted.wrappedValue {
-                            Text("Drop here")
-                                .font(LivelyBrand.Typography.caption)
-                                .foregroundStyle(LivelyBrand.foreground)
-                                .transition(.opacity)
-                        } else if title.isEmpty {
-                            Text("Drop a video, or click to browse")
-                                .font(LivelyBrand.Typography.caption)
-                                .foregroundStyle(LivelyBrand.mutedForeground)
-                        } else {
-                            Text(title)
-                                .font(LivelyBrand.Typography.caption)
-                                .foregroundStyle(LivelyBrand.mutedForeground)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 80)
-                    .overlay {
-                        // Spell: Aurora rotating gradient border when targeted.
-                        if isTargeted.wrappedValue && !reduceMotion {
-                            RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
-                                .stroke(
-                                    AngularGradient(
-                                        colors: [
-                                            LivelyBrand.primary,
-                                            LivelyBrand.primarySoft,
-                                            LivelyBrand.primary.opacity(0.4),
-                                            LivelyBrand.primarySoft,
-                                            LivelyBrand.primary
-                                        ],
-                                        center: .center,
-                                        angle: .degrees(auroraRotation)
-                                    ),
-                                    lineWidth: 2
-                                )
-                                .onAppear {
-                                    withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
-                                        auroraRotation = 360
-                                    }
-                                }
-                                .onDisappear { auroraRotation = 0 }
-                        } else {
-                            RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
-                                .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
-                                .foregroundStyle(
-                                    isTargeted.wrappedValue
-                                        ? LivelyBrand.primary.opacity(0.68)
-                                        : LivelyBrand.border.opacity(0.52)
-                                )
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
+                emptyPlaceholderView
             }
         }
         .padding(LivelyBrand.Spacing.md)
@@ -736,5 +614,142 @@ private struct DropZoneView: View {
             }
             return true
         }
+    }
+
+    // MARK: - Sub-views (fixes compiler type-check timeout)
+
+    @ViewBuilder
+    private var progressView: some View {
+        ProgressView()
+            .controlSize(.small)
+            .frame(maxWidth: .infinity, minHeight: 80)
+    }
+
+    @ViewBuilder
+    private func activeVideoView(url: URL) -> some View {
+        VStack(spacing: 8) {
+            ZStack(alignment: .topTrailing) {
+                VideoThumbnailView(url: url)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        onFilePick()
+                    }
+                    .overlay(alignment: .bottomLeading) {
+                        Text("Click to change")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(.black.opacity(0.55))
+                            .clipShape(.rect(cornerRadius: LivelyBrand.Radius.xs))
+                            .padding(6)
+                    }
+                
+                Button {
+                    onClear()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .red.opacity(0.85))
+                        .font(.system(size: 20))
+                        .padding(6)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Clear this video")
+            }
+            .frame(height: 90)
+            .clipShape(.rect(cornerRadius: LivelyBrand.Radius.sm))
+            
+            HStack {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(LivelyBrand.primary)
+                    .font(LivelyBrand.Typography.caption)
+                Text(url.lastPathComponent)
+                    .font(LivelyBrand.Typography.body.weight(.medium))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .padding(.horizontal, LivelyBrand.Spacing.sm)
+            .padding(.vertical, LivelyBrand.Spacing.xs)
+
+            if !title.isEmpty {
+                Text(title)
+                    .font(LivelyBrand.Typography.caption)
+                    .foregroundStyle(LivelyBrand.mutedForeground)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var emptyPlaceholderView: some View {
+        Button {
+            onFilePick()
+        } label: {
+            VStack(spacing: 6) {
+                Group {
+                    if !reduceMotion {
+                        Image(systemName: isTargeted.wrappedValue ? "arrow.down.circle.fill" : icon)
+                            .symbolEffect(.pulse, value: isTargeted.wrappedValue)
+                            .contentTransition(.symbolEffect(.replace))
+                    } else {
+                        Image(systemName: isTargeted.wrappedValue ? "arrow.down.circle.fill" : icon)
+                    }
+                }
+                .font(.system(size: 28))
+                .foregroundStyle(isTargeted.wrappedValue ? LivelyBrand.primary : LivelyBrand.mutedForeground)
+
+                if isTargeted.wrappedValue {
+                    Text("Drop here")
+                        .font(LivelyBrand.Typography.caption)
+                        .foregroundStyle(LivelyBrand.foreground)
+                        .transition(.opacity)
+                } else if title.isEmpty {
+                    Text("Drop a video, or click to browse")
+                        .font(LivelyBrand.Typography.caption)
+                        .foregroundStyle(LivelyBrand.mutedForeground)
+                } else {
+                    Text(title)
+                        .font(LivelyBrand.Typography.caption)
+                        .foregroundStyle(LivelyBrand.mutedForeground)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 80)
+            .overlay {
+                if isTargeted.wrappedValue && !reduceMotion {
+                    RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
+                        .stroke(
+                            AngularGradient(
+                                colors: [
+                                    LivelyBrand.primary,
+                                    LivelyBrand.primarySoft,
+                                    LivelyBrand.primary.opacity(0.4),
+                                    LivelyBrand.primarySoft,
+                                    LivelyBrand.primary
+                                ],
+                                center: .center,
+                                angle: .degrees(auroraRotation)
+                            ),
+                            lineWidth: 2
+                        )
+                        .onAppear {
+                            withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
+                                auroraRotation = 360
+                            }
+                        }
+                        .onDisappear { auroraRotation = 0 }
+                } else {
+                    RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                        .foregroundStyle(
+                            isTargeted.wrappedValue
+                                ? LivelyBrand.primary.opacity(0.68)
+                                : LivelyBrand.border.opacity(0.52)
+                        )
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
