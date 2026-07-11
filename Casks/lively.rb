@@ -1,8 +1,8 @@
 cask "lively" do
-  version "1.1.0"
-  sha256 "98f14b07e6f00330ae7b60e4d94c1185a5dd24e3152c24200472766ffc89716f"
+  version "1.1.1"
+  sha256 "ad0de0817b09ae9f8a087610dcc2d90f2a5730a9dac64367663fd06467326ae0"
 
-  url "https://github.com/harshabala/Lively/releases/download/v1.1.0/Lively-1.1.0-macOS.zip"
+  url "https://github.com/harshabala/Lively/releases/download/v1.1.1/Lively-1.1.1-macOS.zip"
   name "Lively"
   desc "Native video wallpapers for every macOS Space and display"
   homepage "https://github.com/harshabala/Lively"
