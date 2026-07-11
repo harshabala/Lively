@@ -406,9 +406,7 @@ struct ScreenCardView: View {
             reduceMotion: reduceMotion,
             onFilePick: { openFilePicker(isValidating: isValidating, onPick: onDrop) },
             onURLDrop: { dropped in
-                Task { @MainActor in
-                    handleURLSelection(dropped, isValidating: isValidating, onAccept: onDrop)
-                }
+                handleURLSelection(dropped, isValidating: isValidating, onAccept: onDrop)
             }
         )
     }
@@ -543,8 +541,8 @@ private struct DropZoneView: View {
     let isTargeted: Binding<Bool>
     let isValidating: Binding<Bool>
     let reduceMotion: Bool
-    let onFilePick: () -> Void
-    let onURLDrop: (URL) -> Void
+    let onFilePick: @MainActor () -> Void
+    let onURLDrop: @MainActor (URL) -> Void
 
     @State private var auroraRotation: Double = 0
 
@@ -672,7 +670,7 @@ private struct DropZoneView: View {
                     let data = item as? Data,
                     let url = URL(dataRepresentation: data, relativeTo: nil)
                 else { return }
-                onURLDrop(url)
+                Task { @MainActor in onURLDrop(url) }
             }
             return true
         }
