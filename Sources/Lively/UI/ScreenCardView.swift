@@ -407,6 +407,9 @@ struct ScreenCardView: View {
             onFilePick: { openFilePicker(isValidating: isValidating, onPick: onDrop) },
             onURLDrop: { dropped in
                 handleURLSelection(dropped, isValidating: isValidating, onAccept: onDrop)
+            },
+            onError: { message in
+                showError(message)
             }
         )
     }
@@ -543,6 +546,7 @@ private struct DropZoneView: View {
     let reduceMotion: Bool
     let onFilePick: @MainActor () -> Void
     let onURLDrop: @MainActor (URL) -> Void
+    let onError: @MainActor (String) -> Void
 
     @State private var auroraRotation: Double = 0
 
@@ -665,11 +669,22 @@ private struct DropZoneView: View {
         .accessibilityHint("Drag and drop a video, or click to browse")
         .onDrop(of: [.fileURL], isTargeted: isTargeted) { providers in
             guard let provider = providers.first else { return false }
-            provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
+            provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, error in
+                if let error = error {
+                    Task { @MainActor in
+                        onError(error.localizedDescription)
+                    }
+                    return
+                }
                 guard
                     let data = item as? Data,
                     let url = URL(dataRepresentation: data, relativeTo: nil)
-                else { return }
+                else {
+                    Task { @MainActor in
+                        onError("Failed to parse dropped file.")
+                    }
+                    return
+                }
                 Task { @MainActor in onURLDrop(url) }
             }
             return true
