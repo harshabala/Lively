@@ -1,6 +1,6 @@
 cask "lively" do
   version "1.1.0"
-  sha256 "5f1b425f53c969e13b5059e019e723f93377f500ffc47d362444fa2219e8fbd9"
+  sha256 "459c08c697a68949769cc01179eddc06eb4cf5ed07dff686d16120ee1eac89d4"
 
   url "https://github.com/harshabala/Lively/releases/download/v1.1.0/Lively-1.1.0-macOS.zip"
   name "Lively"
