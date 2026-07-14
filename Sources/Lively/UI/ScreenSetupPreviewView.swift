@@ -154,13 +154,13 @@ private struct DisplayPreviewCard: View {
                     VideoThumbnailView(
                         url: url,
                         height: frame.height,
-                        cornerRadius: 6,
+                        cornerRadius: LivelyBrand.Radius.sm,
                         showLabels: frame.height > 64
                     )
                 } else {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color(nsColor: .controlBackgroundColor))
+                        RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
+                            .fill(LivelyBrand.controlFill)
                         VStack(spacing: 4) {
                             Image(systemName: "photo")
                                 .font(.system(size: 14, weight: .light))
@@ -174,7 +174,7 @@ private struct DisplayPreviewCard: View {
                     }
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm))
 
             Text(space.displayName)
                 .font(.system(size: 9, weight: .semibold))
@@ -185,7 +185,7 @@ private struct DisplayPreviewCard: View {
                 .padding(5)
         }
         .overlay(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
                 .strokeBorder(LivelyBrand.border.opacity(0.6), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.12), radius: 3, x: 0, y: 1)

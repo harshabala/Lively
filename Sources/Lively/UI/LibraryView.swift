@@ -362,8 +362,7 @@ public struct LibraryCard: View {
                 .strokeBorder(LivelyBrand.border.opacity(0.45), lineWidth: 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: LivelyBrand.Radius.md))
-        .scaleEffect(isHovered && !reduceMotion ? 1.015 : 1.0)
-        .animation(reduceMotion ? nil : LivelyBrand.Motion.fast, value: isHovered)
+        // No hover scale (high-frequency); overlay opacity carries feedback only.
         .onHover { isHovered = $0 }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.name) wallpaper")

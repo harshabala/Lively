@@ -133,7 +133,7 @@ public struct PreferencesView: View {
             .padding(.horizontal, 10)
             // Active: filled rounded rect only (no left accent bar).
             .background(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: LivelyBrand.Radius.navItem)
                     .fill(isSelected ? LivelyBrand.selectionFill : Color.clear)
             )
             .contentShape(Rectangle())

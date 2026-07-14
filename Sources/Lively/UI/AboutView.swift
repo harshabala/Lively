@@ -136,7 +136,7 @@ public struct AboutView: View {
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .frame(width: 64, height: 64)
-                            .foregroundStyle(LivelyBrand.accent)
+                            .foregroundStyle(LivelyBrand.primary)
                     }
 
                     VStack(alignment: .leading, spacing: 4) {

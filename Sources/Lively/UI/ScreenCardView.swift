@@ -192,7 +192,7 @@ struct ScreenCardView: View {
                     .foregroundStyle(LivelyBrand.foreground)
                     .padding(.horizontal, LivelyBrand.Spacing.md)
                     .padding(.vertical, LivelyBrand.Spacing.sm)
-                    .background(LivelyBrand.accent.opacity(0.95))
+                    .background(LivelyBrand.controlFill.opacity(0.95))
                     .clipShape(.rect(cornerRadius: LivelyBrand.Radius.sm))
                     .overlay(
                         RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
@@ -596,7 +596,7 @@ private struct DropZoneView: View {
                 .fill(
                     isTargeted.wrappedValue
                         ? LivelyBrand.primary.opacity(0.12)
-                        : LivelyBrand.accent.opacity(0.35)
+                        : LivelyBrand.controlFill.opacity(0.55)
                 )
         )
         .scaleEffect(isTargeted.wrappedValue ? 1.03 : 1.0)

@@ -117,7 +117,7 @@ public struct DisplaysView: View {
             HStack(spacing: LivelyBrand.Spacing.md) {
                 Image(systemName: "sparkles.rectangle.stack")
                     .font(LivelyBrand.Typography.iconSmall)
-                    .foregroundStyle(LivelyBrand.primary)
+                    .foregroundStyle(LivelyBrand.mutedForeground)
                 
                 VStack(alignment: .leading, spacing: LivelyBrand.Spacing.tiny) {
                     Text("Wallpaper Library")

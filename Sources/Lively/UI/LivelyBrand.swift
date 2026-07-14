@@ -14,13 +14,14 @@ enum LivelyBrand {
     static var background: Color { Color(nsColor: .windowBackgroundColor) }
     static var backgroundLifted: Color { Color(nsColor: .controlBackgroundColor) }
     static var card: Color { Color(nsColor: .controlBackgroundColor) }
+    /// Elevated/control surface fill (not brand accent). Prefer this over inventing greys.
+    static var controlFill: Color { Color(nsColor: .controlBackgroundColor) }
     static var foreground: Color { Color(nsColor: .labelColor) }
     static var mutedForeground: Color { Color(nsColor: .secondaryLabelColor) }
     static var border: Color { Color(nsColor: .separatorColor) }
-    static var accent: Color { Color(nsColor: .controlBackgroundColor) }
     static var logBackground: Color { Color(nsColor: .textBackgroundColor) }
 
-    /// Accent fill for selected sidebar rows (single selection language).
+    /// Brand-tint fill for selected sidebar rows only (interactive selection language).
     static var selectionFill: Color { primary.opacity(0.13) }
 
     static var backgroundGradient: LinearGradient {
@@ -49,8 +50,11 @@ enum LivelyBrand {
         static let xl: CGFloat = 24
     }
 
+    /// Shape system: controls/chips use `sm`, cards/tiles use `md`,
+    /// panels/sheets use `lg`, nav pills use `navItem`, capsules use `full`.
     enum Radius {
         static let sm: CGFloat = 6
+        static let navItem: CGFloat = 8
         static let md: CGFloat = 10
         static let lg: CGFloat = 14
         static let full: CGFloat = 9999

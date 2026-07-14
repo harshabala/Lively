@@ -76,25 +76,29 @@ public struct SettingsContainerView: View {
             Spacer(minLength: LivelyBrand.Spacing.sm)
 
             HStack(spacing: LivelyBrand.Spacing.sm) {
+                // Default action: filled control capsule
                 chromeActionButton(
-                    title: wallpaperController.isPaused ? "Resume Lively" : "Pause Lively",
+                    title: wallpaperController.isPaused ? "Resume" : "Pause",
                     systemImage: wallpaperController.isPaused ? "play.fill" : "pause.fill",
-                    tint: LivelyBrand.foreground,
-                    isDestructive: false
+                    tint: LivelyBrand.foreground
                 ) {
                     wallpaperController.togglePause()
                 }
                 .help(wallpaperController.isPaused ? "Resume wallpapers" : "Pause wallpapers")
                 .accessibilityLabel(wallpaperController.isPaused ? "Resume Lively" : "Pause Lively")
 
-                chromeActionButton(
-                    title: "Quit Lively",
-                    systemImage: "power",
-                    tint: LivelyBrand.destructive,
-                    isDestructive: true
-                ) {
+                // Destructive: text-only, quieter than Pause
+                Button {
                     NSApp.terminate(nil)
+                } label: {
+                    Text("Quit")
+                        .font(LivelyBrand.Typography.caption.weight(.medium))
+                        .foregroundStyle(LivelyBrand.destructive)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
                 }
+                .buttonStyle(PressScaleButtonStyle())
+                .focusEffectDisabled()
                 .help("Quit Lively")
                 .accessibilityLabel("Quit Lively")
             }
@@ -146,7 +150,6 @@ public struct SettingsContainerView: View {
         title: String,
         systemImage: String,
         tint: Color,
-        isDestructive: Bool,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -154,7 +157,7 @@ public struct SettingsContainerView: View {
                 Image(systemName: systemImage)
                     .font(.system(size: 11, weight: .semibold))
                 Text(title)
-                    .font(LivelyBrand.Typography.caption.weight(.medium))
+                    .font(LivelyBrand.Typography.caption.weight(.semibold))
                     .lineLimit(1)
             }
             .foregroundStyle(tint)
@@ -162,11 +165,11 @@ public struct SettingsContainerView: View {
             .padding(.vertical, 7)
             .background(
                 Capsule()
-                    .fill(Color(nsColor: .controlBackgroundColor))
+                    .fill(LivelyBrand.controlFill)
             )
             .overlay(
                 Capsule()
-                    .strokeBorder(LivelyBrand.border.opacity(isDestructive ? 0.55 : 0.45), lineWidth: 1)
+                    .strokeBorder(LivelyBrand.border.opacity(0.45), lineWidth: 1)
             )
         }
         .buttonStyle(PressScaleButtonStyle())
