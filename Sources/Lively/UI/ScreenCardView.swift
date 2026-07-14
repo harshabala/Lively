@@ -11,6 +11,8 @@ private let supportedCodecs: [FourCharCode] = [kCMVideoCodecType_H264, kCMVideoC
 struct ScreenCardView: View {
     let space: ScreenSpace
     let configStore: ConfigStore
+    /// 1-based index among connected displays (Display 1, Display 2, …).
+    var displayIndex: Int = 1
 
     @ViewState private var currentConfig: SpaceConfig?
     @ViewState private var isTargetedMain = false
@@ -147,10 +149,7 @@ struct ScreenCardView: View {
 
             if config != nil {
                 displaySettingsSection
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .offset(y: 6)),
-                        removal: .opacity
-                    ))
+                    .transition(LivelyBrand.contentTransition)
             }
         }
         .background(
@@ -165,7 +164,7 @@ struct ScreenCardView: View {
         .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: currentWallpaper.mode)
         .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: config != nil)
         .overlay(alignment: .top) {
-            VStack(spacing: 8) {
+            VStack(spacing: LivelyBrand.Spacing.sm) {
                 if let error = errorMessage {
                     Text(error)
                         .font(LivelyBrand.Typography.footnote.weight(.medium))
@@ -175,15 +174,12 @@ struct ScreenCardView: View {
                         .background(LivelyBrand.destructive.opacity(0.92))
                         .clipShape(.rect(cornerRadius: LivelyBrand.Radius.sm))
                         .padding(.top, LivelyBrand.Spacing.sm)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .top).combined(with: .opacity),
-                            removal: .opacity
-                        ))
+                        .transition(.move(edge: .top).combined(with: .opacity))
                         .zIndex(10)
                 }
-                
+
                 if showSuccessToast {
-                    HStack(spacing: 6) {
+                    HStack(spacing: LivelyBrand.Spacing.xxs) {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(LivelyBrand.primary)
                         Text("Playing on this Space. Switch Spaces to set another.")
@@ -199,10 +195,7 @@ struct ScreenCardView: View {
                             .strokeBorder(LivelyBrand.border.opacity(0.45))
                     )
                     .padding(.top, LivelyBrand.Spacing.sm)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .top).combined(with: .opacity),
-                        removal: .opacity
-                    ))
+                    .transition(.move(edge: .top).combined(with: .opacity))
                     .zIndex(11)
                 }
             }
@@ -229,18 +222,32 @@ struct ScreenCardView: View {
 
     // MARK: Header
 
+    private var displayTitle: String {
+        "Display \(displayIndex)"
+    }
+
     private var displayHeader: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: LivelyBrand.Spacing.md) {
             Image(systemName: "display")
-                .font(LivelyBrand.Typography.section)
+                .font(LivelyBrand.Typography.iconControl)
                 .foregroundStyle(LivelyBrand.mutedForeground)
-                .frame(width: 24)
+                .frame(width: 24, height: 24)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(space.displayName)
-                    .font(LivelyBrand.Typography.title)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                // Hierarchy: index label (section) + hardware name (title)
+                HStack(alignment: .firstTextBaseline, spacing: LivelyBrand.Spacing.sm) {
+                    Text(displayTitle)
+                        .font(LivelyBrand.Typography.section)
+                        .foregroundStyle(LivelyBrand.mutedForeground)
+                    Text(space.displayName)
+                        .font(LivelyBrand.Typography.title)
+                        .foregroundStyle(LivelyBrand.foreground)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(displayTitle), \(space.displayName)")
+
                 if let label = assignedVideoLabel {
                     Text(label)
                         .font(LivelyBrand.Typography.mono)
@@ -250,7 +257,7 @@ struct ScreenCardView: View {
                 }
             }
 
-            Spacer()
+            Spacer(minLength: LivelyBrand.Spacing.sm)
 
             if config != nil {
                 Button {
@@ -258,15 +265,15 @@ struct ScreenCardView: View {
                 } label: {
                     Label("Remove wallpaper", systemImage: "trash")
                         .labelStyle(.iconOnly)
-                        .font(LivelyBrand.Typography.footnote)
+                        .font(LivelyBrand.Typography.iconControl)
                         .foregroundStyle(LivelyBrand.destructive)
-                        .frame(minWidth: 32, minHeight: 32)
+                        .frame(minWidth: LivelyBrand.Spacing.controlMin, minHeight: LivelyBrand.Spacing.controlMin)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(PressScaleButtonStyle())
                 .accessibilityLabel("Remove wallpaper")
                 .accessibilityHint("Removes the assigned wallpaper from this display")
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .transition(.opacity.combined(with: .scale(scale: 0.97)))
             }
         }
         .padding(.horizontal, LivelyBrand.Spacing.lg)
@@ -280,10 +287,10 @@ struct ScreenCardView: View {
             Divider()
                 .overlay(LivelyBrand.border.opacity(0.35))
 
-            HStack(spacing: 16) {
-                HStack(spacing: 6) {
-                    Text("Scale:")
-                        .font(LivelyBrand.Typography.footnote.weight(.medium))
+            HStack(spacing: LivelyBrand.Spacing.md) {
+                HStack(spacing: LivelyBrand.Spacing.sm) {
+                    Text("Scale")
+                        .font(LivelyBrand.Typography.caption.weight(.semibold))
                         .foregroundStyle(LivelyBrand.mutedForeground)
 
                     Picker("Scale", selection: Binding(
@@ -301,11 +308,14 @@ struct ScreenCardView: View {
                         Text("Fit").tag(VideoGravity.fit)
                     }
                     .pickerStyle(.menu)
-                    .controlSize(.small)
+                    .controlSize(.regular)
                     .labelsHidden()
+                    .font(LivelyBrand.Typography.body)
+                    .frame(minHeight: LivelyBrand.Spacing.controlMin)
                 }
+                .accessibilityElement(children: .combine)
 
-                Spacer()
+                Spacer(minLength: LivelyBrand.Spacing.sm)
 
                 Button {
                     let newValue = !currentWallpaper.isMuted
@@ -324,9 +334,9 @@ struct ScreenCardView: View {
                             Image(systemName: currentWallpaper.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                         }
                     }
-                    .font(LivelyBrand.Typography.footnote)
+                    .font(LivelyBrand.Typography.iconSmall)
                     .foregroundStyle(currentWallpaper.isMuted ? LivelyBrand.mutedForeground : LivelyBrand.primary)
-                    .frame(minWidth: 32, minHeight: 32)
+                    .frame(minWidth: LivelyBrand.Spacing.controlMin + 4, minHeight: LivelyBrand.Spacing.controlMin + 4)
                     .contentShape(Circle())
                     .background(
                         Circle()
@@ -352,14 +362,12 @@ struct ScreenCardView: View {
                         in: 0...1
                     )
                     .tint(LivelyBrand.primary)
-                    .controlSize(.small)
-                    .frame(width: 80)
+                    .controlSize(.regular)
+                    .frame(width: 100)
+                    .frame(minHeight: LivelyBrand.Spacing.controlMin)
                     .accessibilityLabel("Volume")
                     .accessibilityValue("\(Int(currentWallpaper.volume * 100)) percent")
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .offset(x: -8)),
-                        removal: .opacity.combined(with: .offset(x: -4))
-                    ))
+                    .transition(.opacity)
                 }
             }
             .padding(.horizontal, LivelyBrand.Spacing.lg)
@@ -369,10 +377,7 @@ struct ScreenCardView: View {
     }
 
     private var modeTransition: AnyTransition {
-        .asymmetric(
-            insertion: .opacity.combined(with: .offset(y: 6)),
-            removal: .opacity
-        )
+        LivelyBrand.contentTransition
     }
 
     // MARK: Drop Zone

@@ -68,8 +68,9 @@ struct GlassButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, LivelyBrand.Spacing.md)
+            .padding(.vertical, LivelyBrand.Spacing.sm)
+            .frame(minHeight: LivelyBrand.Spacing.controlMin)
             .foregroundStyle(isProminent ? .white : .primary)
             .background(
                 ZStack {
@@ -84,10 +85,7 @@ struct GlassButtonStyle: ButtonStyle {
             )
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .opacity(configuration.isPressed ? 0.92 : 1.0)
-            .animation(
-                reduceMotion ? nil : .spring(duration: 0.15, bounce: 0),
-                value: configuration.isPressed
-            )
+            .animation(reduceMotion ? nil : LivelyBrand.Motion.press, value: configuration.isPressed)
     }
 }
 

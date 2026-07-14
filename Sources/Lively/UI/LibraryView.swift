@@ -31,16 +31,10 @@ public struct LibraryView: View {
             ZStack {
                 if libraryManager.items.isEmpty {
                     emptyState
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .offset(y: 8)),
-                            removal: .opacity
-                        ))
+                        .transition(LivelyBrand.contentTransition)
                 } else {
                     gridView
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .offset(y: 6)),
-                            removal: .opacity
-                        ))
+                        .transition(LivelyBrand.contentTransition)
                 }
             }
             .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: libraryManager.items.isEmpty)
@@ -79,16 +73,19 @@ public struct LibraryView: View {
                             .font(LivelyBrand.Typography.caption)
                             .foregroundStyle(LivelyBrand.mutedForeground)
                         Picker("Target Screen", selection: $libraryManager.spaceKeyTarget) {
-                            ForEach(spaceMonitor.screenSpaces) { space in
-                                Text(space.displayName)
+                            ForEach(Array(spaceMonitor.screenSpaces.enumerated()), id: \.element.id) { index, space in
+                                Text("Display \(index + 1) · \(space.displayName)")
                                     .tag(space.spaceKey as String?)
                             }
                         }
                         .pickerStyle(.menu)
+                        .controlSize(.regular)
                         .labelsHidden()
+                        .font(LivelyBrand.Typography.body)
                     }
                     .padding(.horizontal, LivelyBrand.Spacing.md)
-                    .padding(.vertical, LivelyBrand.Spacing.xs)
+                    .padding(.vertical, LivelyBrand.Spacing.sm)
+                    .frame(minHeight: LivelyBrand.Spacing.controlMin)
                     .background(
                         RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
                             .fill(Color(nsColor: .controlBackgroundColor))
@@ -102,22 +99,22 @@ public struct LibraryView: View {
                 Button {
                     addWallpaperFromPanel()
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: LivelyBrand.Spacing.xxs) {
                         Image(systemName: "plus")
                             .font(.system(size: 12, weight: .semibold))
                         Text("Add Wallpaper")
                             .font(LivelyBrand.Typography.caption.weight(.semibold))
                     }
                     .foregroundStyle(Color.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, LivelyBrand.Spacing.lg)
+                    .frame(minHeight: LivelyBrand.Spacing.controlMin)
                     .background(
                         RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
                             .fill(LivelyBrand.primary)
                     )
+                    .contentShape(RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm))
                 }
                 .buttonStyle(PressScaleButtonStyle())
-                .focusEffectDisabled()
                 .accessibilityLabel("Add wallpaper")
                 .accessibilityHint("Choose a video file to save in your library for reuse.")
             }
@@ -133,7 +130,7 @@ public struct LibraryView: View {
                 .font(.system(size: 36, weight: .light))
                 .foregroundStyle(LivelyBrand.mutedForeground)
             Text("No wallpapers yet")
-                .font(LivelyBrand.Typography.body.weight(.semibold))
+                .font(LivelyBrand.Typography.section)
             Text("Add MP4, MOV, or M4V files to build a reusable library. Apply any of them to a display without re-importing.")
                 .font(LivelyBrand.Typography.caption)
                 .foregroundStyle(LivelyBrand.mutedForeground)
@@ -146,15 +143,15 @@ public struct LibraryView: View {
                 Text("Add Your First Wallpaper")
                     .font(LivelyBrand.Typography.caption.weight(.semibold))
                     .foregroundStyle(Color.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 9)
+                    .padding(.horizontal, LivelyBrand.Spacing.lg)
+                    .frame(minHeight: LivelyBrand.Spacing.controlMin)
                     .background(
                         RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
                             .fill(LivelyBrand.primary)
                     )
+                    .contentShape(RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm))
             }
             .buttonStyle(PressScaleButtonStyle())
-            .focusEffectDisabled()
             .padding(.top, LivelyBrand.Spacing.sm)
 
             Spacer(minLength: 24)
@@ -293,7 +290,8 @@ public struct LibraryCard: View {
                     .frame(height: 140)
                 }
 
-                Color.black.opacity(isHovered ? 0.35 : 0)
+                // Soft scrim always present so actions stay visible (not hover-only).
+                Color(nsColor: .labelColor).opacity(isHovered ? 0.38 : 0.22)
                     .animation(reduceMotion ? nil : LivelyBrand.Motion.fast, value: isHovered)
 
                 HStack(spacing: LivelyBrand.Spacing.md) {
@@ -302,10 +300,12 @@ public struct LibraryCard: View {
                             onApply(fileURL)
                         } label: {
                             Image(systemName: "play.circle.fill")
-                                .font(.system(size: 32))
+                                .font(.system(size: 30, weight: .regular))
                                 .foregroundStyle(.white)
+                                .frame(minWidth: LivelyBrand.Spacing.controlMin + 8, minHeight: LivelyBrand.Spacing.controlMin + 8)
+                                .contentShape(Circle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(PressScaleButtonStyle())
                         .help("Apply to target screen")
                         .accessibilityLabel("Apply \(item.name)")
                     }
@@ -314,17 +314,17 @@ public struct LibraryCard: View {
                         onRemove()
                     } label: {
                         Image(systemName: "trash.circle.fill")
-                            .font(.system(size: 28))
+                            .font(.system(size: 28, weight: .regular))
                             .foregroundStyle(Color(nsColor: .systemRed))
+                            .frame(minWidth: LivelyBrand.Spacing.controlMin + 8, minHeight: LivelyBrand.Spacing.controlMin + 8)
+                            .contentShape(Circle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressScaleButtonStyle())
                     .help("Remove from library")
                     .accessibilityLabel("Remove \(item.name)")
                 }
-                .opacity(isHovered ? 1 : 0)
-                .scaleEffect(isHovered || reduceMotion ? 1 : 0.92)
+                .scaleEffect(isHovered || reduceMotion ? 1 : 0.97)
                 .animation(reduceMotion ? nil : LivelyBrand.Motion.fast, value: isHovered)
-                .allowsHitTesting(isHovered)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 140)
@@ -336,20 +336,35 @@ public struct LibraryCard: View {
                     .foregroundStyle(LivelyBrand.foreground)
                     .lineLimit(1)
 
-                if let fileURL {
-                    Button {
-                        onApply(fileURL)
-                    } label: {
-                        Text("Apply")
-                            .font(LivelyBrand.Typography.footnote.weight(.semibold))
-                            .foregroundStyle(LivelyBrand.primary)
+                HStack(spacing: LivelyBrand.Spacing.md) {
+                    if let fileURL {
+                        Button {
+                            onApply(fileURL)
+                        } label: {
+                            Text("Apply")
+                                .font(LivelyBrand.Typography.caption.weight(.semibold))
+                                .foregroundStyle(LivelyBrand.primary)
+                                .frame(minHeight: LivelyBrand.Spacing.controlMin - 8)
+                        }
+                        .buttonStyle(PressScaleButtonStyle())
+                    } else {
+                        Text("File missing")
+                            .font(LivelyBrand.Typography.footnote)
+                            .foregroundStyle(LivelyBrand.destructive)
                     }
-                    .buttonStyle(.plain)
-                    .focusEffectDisabled()
-                } else {
-                    Text("File missing")
-                        .font(LivelyBrand.Typography.footnote)
-                        .foregroundStyle(LivelyBrand.destructive)
+
+                    Spacer(minLength: 0)
+
+                    Button {
+                        onRemove()
+                    } label: {
+                        Text("Remove")
+                            .font(LivelyBrand.Typography.caption.weight(.medium))
+                            .foregroundStyle(LivelyBrand.destructive)
+                            .frame(minHeight: LivelyBrand.Spacing.controlMin - 8)
+                    }
+                    .buttonStyle(PressScaleButtonStyle())
+                    .accessibilityLabel("Remove \(item.name)")
                 }
             }
             .padding(.horizontal, LivelyBrand.Spacing.md)
@@ -362,9 +377,8 @@ public struct LibraryCard: View {
                 .strokeBorder(LivelyBrand.border.opacity(0.45), lineWidth: 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: LivelyBrand.Radius.md))
-        // No hover scale (high-frequency); overlay opacity carries feedback only.
         .onHover { isHovered = $0 }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(item.name) wallpaper")
         .accessibilityHint("Apply to the selected display, or remove from the library.")
     }

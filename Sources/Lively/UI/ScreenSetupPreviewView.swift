@@ -177,18 +177,23 @@ private struct DisplayPreviewCard: View {
             .clipShape(RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm))
 
             Text(space.displayName)
-                .font(.system(size: 9, weight: .semibold))
+                .font(LivelyBrand.Typography.badge)
                 .foregroundStyle(.white)
-                .padding(.horizontal, 5)
+                .padding(.horizontal, LivelyBrand.Spacing.xs)
                 .padding(.vertical, 2)
-                .background(Color.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 3))
-                .padding(5)
+                .background(Color(nsColor: .labelColor).opacity(0.55), in: RoundedRectangle(cornerRadius: 3))
+                .padding(LivelyBrand.Spacing.xs)
         }
         .overlay(
             RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
                 .strokeBorder(LivelyBrand.border.opacity(0.6), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.12), radius: 3, x: 0, y: 1)
+        .shadow(
+            color: LivelyBrand.Shadow.color,
+            radius: 3,
+            x: LivelyBrand.Shadow.x,
+            y: 1
+        )
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(space.displayName), \(wallpaperURL == nil ? "no wallpaper assigned" : "wallpaper assigned")")
     }

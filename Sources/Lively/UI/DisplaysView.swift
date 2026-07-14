@@ -33,35 +33,32 @@ public struct DisplaysView: View {
     }
 
     private var screensSection: some View {
+        // No redundant "Displays" subheading — the primary tab already names this surface.
         VStack(alignment: .leading, spacing: LivelyBrand.Spacing.md) {
-            sectionLabel("Displays", icon: "display.2")
-
             if spaceMonitor.isRefreshing && spaceMonitor.screenSpaces.isEmpty {
                 detectingView
-                    .transition(.opacity.combined(with: .offset(y: 8)))
+                    .transition(LivelyBrand.contentTransition)
             } else if spaceMonitor.screenSpaces.isEmpty {
                 emptyDisplaysView
-                    .transition(.opacity.combined(with: .offset(y: 8)))
+                    .transition(LivelyBrand.contentTransition)
             } else {
                 VStack(spacing: LivelyBrand.Spacing.md) {
                     ForEach(Array(spaceMonitor.screenSpaces.enumerated()), id: \.element.id) { index, space in
-                        ScreenCardView(space: space, configStore: configStore)
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .offset(y: 12)),
-                                removal: .opacity
-                            ))
-                            .animation(
-                                reduceMotion ? nil : LivelyBrand.Motion.normal.delay(Double(min(index, 2)) * 0.04),
-                                value: spaceMonitor.screenSpaces.count
-                            )
+                        ScreenCardView(
+                            space: space,
+                            configStore: configStore,
+                            displayIndex: index + 1
+                        )
+                        .transition(LivelyBrand.contentTransition)
+                        .animation(
+                            reduceMotion ? nil : LivelyBrand.Motion.normal.delay(Double(min(index, 2)) * 0.04),
+                            value: spaceMonitor.screenSpaces.count
+                        )
                     }
-                    
+
                     libraryButton
                 }
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .offset(y: 8)),
-                    removal: .opacity
-                ))
+                .transition(LivelyBrand.contentTransition)
             }
         }
         .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: spaceMonitor.screenSpaces.isEmpty)
@@ -118,10 +115,11 @@ public struct DisplaysView: View {
                 Image(systemName: "sparkles.rectangle.stack")
                     .font(LivelyBrand.Typography.iconSmall)
                     .foregroundStyle(LivelyBrand.mutedForeground)
-                
+                    .frame(width: 24, height: 24)
+
                 VStack(alignment: .leading, spacing: LivelyBrand.Spacing.tiny) {
                     Text("Wallpaper Library")
-                        .font(LivelyBrand.Typography.body.weight(.semibold))
+                        .font(LivelyBrand.Typography.section)
                         .foregroundStyle(LivelyBrand.foreground)
                     Text("Save videos once and reuse them on any display.")
                         .font(LivelyBrand.Typography.footnote)
@@ -129,14 +127,15 @@ public struct DisplaysView: View {
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                
+
                 Spacer()
-                
+
                 Image(systemName: "chevron.right")
-                    .font(LivelyBrand.Typography.footnote)
+                    .font(LivelyBrand.Typography.caption.weight(.semibold))
                     .foregroundStyle(LivelyBrand.mutedForeground)
             }
             .padding(LivelyBrand.Spacing.md)
+            .frame(minHeight: LivelyBrand.Spacing.controlMin + LivelyBrand.Spacing.lg)
             .contentShape(Rectangle())
         }
         .buttonStyle(PressScaleButtonStyle())
@@ -154,12 +153,6 @@ public struct DisplaysView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Open Wallpaper Library")
         .accessibilityHint("Open your reusable wallpaper library to add or apply videos.")
-    }
-
-    private func sectionLabel(_ title: String, icon: String) -> some View {
-        Label(title, systemImage: icon)
-            .font(LivelyBrand.Typography.footnote.weight(.semibold))
-            .foregroundStyle(LivelyBrand.mutedForeground)
     }
 
     @ViewBuilder

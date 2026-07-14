@@ -52,7 +52,6 @@ struct PillTabBar<Selection: Hashable>: View {
                 }
         }
         .buttonStyle(PressScaleButtonStyle())
-        .focusEffectDisabled()
         .accessibilityLabel(label)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityHint("Tab \(index + 1) of \(total)")
@@ -68,9 +67,6 @@ struct PressScaleButtonStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .opacity(configuration.isPressed ? 0.92 : 1.0)
-            .animation(
-                reduceMotion ? nil : .spring(duration: 0.15, bounce: 0),
-                value: configuration.isPressed
-            )
+            .animation(reduceMotion ? nil : LivelyBrand.Motion.press, value: configuration.isPressed)
     }
 }

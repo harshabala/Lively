@@ -117,7 +117,7 @@ public struct PreferencesView: View {
                 section = item
             }
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: LivelyBrand.Spacing.sm) {
                 Image(systemName: item.systemImage)
                     .font(.system(size: 12, weight: .semibold))
                     .frame(width: 16)
@@ -129,8 +129,9 @@ public struct PreferencesView: View {
 
                 Spacer(minLength: 0)
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 10)
+            .padding(.vertical, LivelyBrand.Spacing.sm)
+            .padding(.horizontal, LivelyBrand.Spacing.md)
+            .frame(minHeight: LivelyBrand.Spacing.controlMin)
             // Active: filled rounded rect only (no left accent bar).
             .background(
                 RoundedRectangle(cornerRadius: LivelyBrand.Radius.navItem)
@@ -139,7 +140,6 @@ public struct PreferencesView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PressScaleButtonStyle())
-        .focusEffectDisabled()
         .accessibilityLabel(item.title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
@@ -182,14 +182,11 @@ public struct PreferencesView: View {
     }
 
     private var paneTransition: AnyTransition {
-        .asymmetric(
-            insertion: .opacity.combined(with: .offset(y: 6)),
-            removal: .opacity.combined(with: .offset(y: -3))
-        )
+        LivelyBrand.contentTransition
     }
 
     private func paneHeader(title: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: LivelyBrand.Spacing.xs) {
             Text(title)
                 .font(LivelyBrand.Typography.title)
                 .foregroundStyle(LivelyBrand.foreground)

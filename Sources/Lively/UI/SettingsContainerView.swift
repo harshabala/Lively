@@ -35,10 +35,7 @@ public struct SettingsContainerView: View {
                 switch selectedTab {
                 case .displays:
                     DisplaysView(spaceMonitor: spaceMonitor, configStore: configStore)
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .offset(y: 6)),
-                            removal: .opacity.combined(with: .offset(y: -4))
-                        ))
+                        .transition(LivelyBrand.contentTransition)
                 case .settings:
                     PreferencesView(
                         spaceMonitor: spaceMonitor,
@@ -50,10 +47,7 @@ public struct SettingsContainerView: View {
                             }
                         }
                     )
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .offset(y: 6)),
-                        removal: .opacity.combined(with: .offset(y: -4))
-                    ))
+                    .transition(LivelyBrand.contentTransition)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -101,11 +95,11 @@ public struct SettingsContainerView: View {
                     Text("Quit")
                         .font(LivelyBrand.Typography.caption.weight(.medium))
                         .foregroundStyle(LivelyBrand.destructive)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
+                        .padding(.horizontal, LivelyBrand.Spacing.md)
+                        .frame(minHeight: LivelyBrand.Spacing.controlMin)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(PressScaleButtonStyle())
-                .focusEffectDisabled()
                 .help("Quit Lively")
                 .accessibilityLabel("Quit Lively")
             }
@@ -116,7 +110,7 @@ public struct SettingsContainerView: View {
     }
 
     private var primaryTabs: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: LivelyBrand.Spacing.xs) {
             primaryTabButton(title: "Displays", systemImage: "display", tab: .displays)
             primaryTabButton(title: "Settings", systemImage: "gearshape", tab: .settings)
         }
@@ -129,16 +123,17 @@ public struct SettingsContainerView: View {
                 selectedTab = tab
             }
         } label: {
-            VStack(spacing: 6) {
-                HStack(spacing: 6) {
+            VStack(spacing: LivelyBrand.Spacing.xxs) {
+                HStack(spacing: LivelyBrand.Spacing.xxs) {
                     Image(systemName: systemImage)
-                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                        .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                     Text(title)
-                        .font(LivelyBrand.Typography.caption.weight(.semibold))
+                        .font(LivelyBrand.Typography.nav)
                 }
                 .foregroundStyle(isSelected ? LivelyBrand.foreground : LivelyBrand.mutedForeground)
                 .padding(.horizontal, LivelyBrand.Spacing.md)
                 .padding(.vertical, LivelyBrand.Spacing.sm)
+                .frame(minHeight: LivelyBrand.Spacing.controlMin)
 
                 Rectangle()
                     .fill(isSelected ? LivelyBrand.primary : Color.clear)
@@ -147,8 +142,7 @@ public struct SettingsContainerView: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .focusEffectDisabled()
+        .buttonStyle(PressScaleButtonStyle())
         .accessibilityLabel(title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
@@ -160,16 +154,16 @@ public struct SettingsContainerView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: LivelyBrand.Spacing.xxs) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                 Text(title)
                     .font(LivelyBrand.Typography.caption.weight(.semibold))
                     .lineLimit(1)
             }
             .foregroundStyle(tint)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
+            .padding(.horizontal, LivelyBrand.Spacing.md)
+            .frame(minHeight: LivelyBrand.Spacing.controlMin)
             .background(
                 Capsule()
                     .fill(LivelyBrand.controlFill)
@@ -178,9 +172,9 @@ public struct SettingsContainerView: View {
                 Capsule()
                     .strokeBorder(LivelyBrand.border.opacity(0.45), lineWidth: 1)
             )
+            .contentShape(Capsule())
         }
         .buttonStyle(PressScaleButtonStyle())
-        .focusEffectDisabled()
     }
 
     // MARK: - Status banners
@@ -212,10 +206,7 @@ public struct SettingsContainerView: View {
         VStack(spacing: 0) {
             ForEach(activeBannerKinds, id: \.self) { kind in
                 bannerView(for: kind)
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .offset(y: -4)),
-                        removal: .opacity
-                    ))
+                    .transition(LivelyBrand.contentTransition)
             }
         }
         .animation(reduceMotion ? nil : LivelyBrand.Motion.fast, value: activeBannerKinds)
@@ -276,9 +267,9 @@ public struct SettingsContainerView: View {
             .focusEffectDisabled()
             .accessibilityLabel("View update on GitHub")
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, LivelyBrand.Spacing.sm)
         .padding(.horizontal, LivelyBrand.Spacing.lg)
-        .frame(maxWidth: .infinity, maxHeight: 36, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: LivelyBrand.Spacing.controlMin + LivelyBrand.Spacing.xs, alignment: .leading)
         .background(LivelyBrand.primary.opacity(0.12))
         .accessibilityElement(children: .combine)
     }
@@ -294,9 +285,9 @@ public struct SettingsContainerView: View {
                 .truncationMode(.tail)
                 .help(text)
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, LivelyBrand.Spacing.sm)
         .padding(.horizontal, LivelyBrand.Spacing.lg)
-        .frame(maxWidth: .infinity, maxHeight: 36, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: LivelyBrand.Spacing.controlMin + LivelyBrand.Spacing.xs, alignment: .leading)
         .background(color.opacity(0.10))
     }
 }

@@ -130,7 +130,12 @@ public struct AboutView: View {
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .frame(width: 64, height: 64)
-                            .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
+                            .shadow(
+                                color: LivelyBrand.Shadow.color,
+                                radius: LivelyBrand.Shadow.radius,
+                                x: LivelyBrand.Shadow.x,
+                                y: LivelyBrand.Shadow.y
+                            )
                     } else {
                         Image(systemName: "play.tv.fill")
                             .resizable()
