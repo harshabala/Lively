@@ -2,12 +2,17 @@
 
 set -euo pipefail
 
-# SwiftUI requires the macro plugin from full Xcode, not Command Line Tools alone.
+# Prefer full Xcode when present (best SDK/tooling). Otherwise fall back to
+# Command Line Tools — UI uses ViewState instead of the SwiftUI @State macro
+# so CLT builds succeed without SwiftUIMacros.
 if [[ -d "/Applications/Xcode.app/Contents/Developer" ]]; then
     export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
-elif ! xcodebuild -version &>/dev/null; then
-    echo "❌ Full Xcode is required to build Lively (SwiftUI macros)."
-    echo "   Install Xcode, then run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"
+elif [[ -d "/Library/Developer/CommandLineTools" ]]; then
+    export DEVELOPER_DIR="/Library/Developer/CommandLineTools"
+    echo "ℹ️  Building with Command Line Tools (full Xcode not found)."
+else
+    echo "❌ No Xcode or Command Line Tools found."
+    echo "   Install Xcode from the App Store, or: xcode-select --install"
     exit 1
 fi
 
@@ -36,11 +41,21 @@ mkdir -p "${OUTPUT_DIR}"
 echo "🔨 Building Release configuration..."
 swift build -c release --build-path "${BUILD_PATH}"
 
-EXECUTABLE_PATH="$(find "${BUILD_PATH}" -path "*/release/${EXECUTABLE_NAME}" -type f -perm +111 | head -n 1)"
+# New SwiftPM layouts put products under out/Products/Release (with a
+# "release" symlink). Older layouts used release/ directly. Prefer the
+# known product path, then fall back to a broad search.
+if [[ -x "${BUILD_PATH}/release/${EXECUTABLE_NAME}" ]]; then
+    EXECUTABLE_PATH="${BUILD_PATH}/release/${EXECUTABLE_NAME}"
+elif [[ -x "${BUILD_PATH}/out/Products/Release/${EXECUTABLE_NAME}" ]]; then
+    EXECUTABLE_PATH="${BUILD_PATH}/out/Products/Release/${EXECUTABLE_NAME}"
+else
+    EXECUTABLE_PATH="$(find -L "${BUILD_PATH}" -name "${EXECUTABLE_NAME}" -type f -perm +111 2>/dev/null | head -n 1)"
+fi
 if [ -z "${EXECUTABLE_PATH}" ]; then
     echo "❌ Could not find built executable ${EXECUTABLE_NAME} under ${BUILD_PATH}"
     exit 1
 fi
+echo "   Found executable: ${EXECUTABLE_PATH}"
 
 # Create App Bundle Structure
 echo "📦 Creating App Bundle structure..."
@@ -72,9 +87,9 @@ cat > "${APP_BUNDLE}/Contents/Info.plist" <<EOF
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>1.2.0</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>120</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>LSUIElement</key>

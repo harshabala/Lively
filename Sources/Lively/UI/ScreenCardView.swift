@@ -12,25 +12,25 @@ struct ScreenCardView: View {
     let space: ScreenSpace
     let configStore: ConfigStore
 
-    @State private var currentConfig: SpaceConfig?
-    @State private var isTargetedMain = false
-    @State private var isTargetedLight = false
-    @State private var isTargetedDark = false
-    @State private var isValidatingMain = false
-    @State private var isValidatingLight = false
-    @State private var isValidatingDark = false
-    @State private var resolvedStaticURL: URL?
-    @State private var resolvedLightURL: URL?
-    @State private var resolvedDarkURL: URL?
+    @ViewState private var currentConfig: SpaceConfig?
+    @ViewState private var isTargetedMain = false
+    @ViewState private var isTargetedLight = false
+    @ViewState private var isTargetedDark = false
+    @ViewState private var isValidatingMain = false
+    @ViewState private var isValidatingLight = false
+    @ViewState private var isValidatingDark = false
+    @ViewState private var resolvedStaticURL: URL?
+    @ViewState private var resolvedLightURL: URL?
+    @ViewState private var resolvedDarkURL: URL?
 
     @EnvironmentObject var wallpaperController: WallpaperController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var errorMessage: String?
-    @State private var errorClearTask: Task<Void, Swift.Error>?
+    @ViewState private var errorMessage: String?
+    @ViewState private var errorClearTask: Task<Void, Swift.Error>?
     
-    @State private var showSuccessToast = false
-    @State private var toastTask: Task<Void, Swift.Error>?
+    @ViewState private var showSuccessToast = false
+    @ViewState private var toastTask: Task<Void, Swift.Error>?
     // auroraRotation is owned per-DropZoneView instance (see C-1 fix below)
 
     private var config: SpaceConfig? { currentConfig }
@@ -170,8 +170,8 @@ struct ScreenCardView: View {
                     Text(error)
                         .font(LivelyBrand.Typography.footnote.weight(.medium))
                         .foregroundStyle(LivelyBrand.onDestructive)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, LivelyBrand.Spacing.md)
+                        .padding(.vertical, LivelyBrand.Spacing.xxs)
                         .background(LivelyBrand.destructive.opacity(0.92))
                         .clipShape(.rect(cornerRadius: LivelyBrand.Radius.sm))
                         .padding(.top, LivelyBrand.Spacing.sm)
@@ -190,8 +190,8 @@ struct ScreenCardView: View {
                     }
                     .font(LivelyBrand.Typography.footnote.weight(.medium))
                     .foregroundStyle(LivelyBrand.foreground)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, LivelyBrand.Spacing.md)
+                    .padding(.vertical, LivelyBrand.Spacing.sm)
                     .background(LivelyBrand.accent.opacity(0.95))
                     .clipShape(.rect(cornerRadius: LivelyBrand.Radius.sm))
                     .overlay(
@@ -254,7 +254,7 @@ struct ScreenCardView: View {
 
             if config != nil {
                 Button {
-                    configStore.remove(spaceKey: space.spaceKey)
+                    confirmRemoveWallpaper()
                 } label: {
                     Label("Remove wallpaper", systemImage: "trash")
                         .labelStyle(.iconOnly)
@@ -396,7 +396,7 @@ struct ScreenCardView: View {
         )
     }
 
-    // C-1 fix: DropZoneView owns its own @State so each instance has
+    // C-1 fix: DropZoneView owns its own @ViewState so each instance has
     // independent auroraRotation — no shared state glitch in .appearance mode.
     private func dropZone(
         title: String,
@@ -475,6 +475,21 @@ struct ScreenCardView: View {
     }
 
     @MainActor
+    private func confirmRemoveWallpaper() {
+        let alert = NSAlert()
+        alert.messageText = "Remove wallpaper?"
+        alert.informativeText = "This removes the assigned video configuration from this Space."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Remove")
+        alert.addButton(withTitle: "Cancel")
+        
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            configStore.remove(spaceKey: space.spaceKey)
+        }
+    }
+
+    @MainActor
     private func openFilePicker(
         isValidating: Binding<Bool>,
         onPick: @escaping @MainActor (URL) -> Void
@@ -546,7 +561,7 @@ private enum VideoURLValidation {
 // MARK: - Drop Zone View (C-1: each instance owns its own auroraRotation)
 
 /// Self-contained drop zone. By being a separate `View` struct, each instance
-/// gets its own `@State private var auroraRotation`, preventing the shared-state
+/// gets its own `@ViewState private var auroraRotation`, preventing the shared-state
 /// glitch that occurred in `.appearance` mode when one zone's `.onDisappear`
 /// reset the other zone's animation.
 private struct DropZoneView: View {
@@ -561,7 +576,7 @@ private struct DropZoneView: View {
     let onError: @MainActor (String) -> Void
     let onClear: @MainActor () -> Void
 
-    @State private var auroraRotation: Double = 0
+    @ViewState private var auroraRotation: Double = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -626,36 +641,42 @@ private struct DropZoneView: View {
 
     @ViewBuilder
     private func activeVideoView(url: URL) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: LivelyBrand.Spacing.sm) {
             ZStack(alignment: .topTrailing) {
-                VideoThumbnailView(url: url)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        onFilePick()
-                    }
-                    .overlay(alignment: .bottomLeading) {
-                        Text("Click to change")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(.black.opacity(0.55))
-                            .clipShape(.rect(cornerRadius: LivelyBrand.Radius.sm))
-                            .padding(6)
-                    }
+                Button {
+                    onFilePick()
+                } label: {
+                    VideoThumbnailView(url: url)
+                        .contentShape(Rectangle())
+                        .overlay(alignment: .bottomLeading) {
+                            Text("Click to change")
+                                .font(LivelyBrand.Typography.badge)
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, LivelyBrand.Spacing.xxs)
+                                .padding(.vertical, LivelyBrand.Spacing.tiny)
+                                .background(LivelyBrand.overlayBackground)
+                                .clipShape(.rect(cornerRadius: LivelyBrand.Radius.sm))
+                                .padding(LivelyBrand.Spacing.xxs)
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Change video for \(title.isEmpty ? "Wallpaper" : title)")
+                .accessibilityHint("Double tap to open the file picker and select a new video")
                 
                 Button {
                     onClear()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, .red.opacity(0.85))
-                        .font(.system(size: 20))
-                        .padding(6)
+                        .foregroundStyle(.white, LivelyBrand.clearButtonBackground)
+                        .font(LivelyBrand.Typography.iconSmall)
+                        .padding(LivelyBrand.Spacing.xxs)
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .help("Clear this video")
+                .accessibilityLabel("Remove video")
             }
             .frame(height: 90)
             .clipShape(.rect(cornerRadius: LivelyBrand.Radius.sm))
@@ -685,7 +706,7 @@ private struct DropZoneView: View {
         Button {
             onFilePick()
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: LivelyBrand.Spacing.xxs) {
                 Group {
                     if !reduceMotion {
                         Image(systemName: isTargeted.wrappedValue ? "arrow.down.circle.fill" : icon)
@@ -695,7 +716,7 @@ private struct DropZoneView: View {
                         Image(systemName: isTargeted.wrappedValue ? "arrow.down.circle.fill" : icon)
                     }
                 }
-                .font(.system(size: 28))
+                .font(LivelyBrand.Typography.iconLarge)
                 .foregroundStyle(isTargeted.wrappedValue ? LivelyBrand.primary : LivelyBrand.mutedForeground)
 
                 if isTargeted.wrappedValue {
@@ -708,9 +729,14 @@ private struct DropZoneView: View {
                         .font(LivelyBrand.Typography.caption)
                         .foregroundStyle(LivelyBrand.mutedForeground)
                 } else {
-                    Text(title)
-                        .font(LivelyBrand.Typography.caption)
-                        .foregroundStyle(LivelyBrand.mutedForeground)
+                    VStack(spacing: 2) {
+                        Text(title)
+                            .font(LivelyBrand.Typography.caption.weight(.semibold))
+                            .foregroundStyle(LivelyBrand.foreground)
+                        Text("Drop a video, or click to browse")
+                            .font(LivelyBrand.Typography.footnote)
+                            .foregroundStyle(LivelyBrand.mutedForeground)
+                    }
                 }
             }
             .frame(maxWidth: .infinity)

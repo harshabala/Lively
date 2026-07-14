@@ -2,18 +2,26 @@ import SwiftUI
 import AppKit
 
 enum LivelyBrand {
-    static let background = adaptive(light: "#F2FFFE", dark: "#031116")
-    static let backgroundLifted = adaptive(light: "#E5F3F3", dark: "#071A23")
-    static let card = adaptive(light: "#FFFFFF", dark: "#0B1D24")
+    // Brand accents — use sparingly (active nav, primary actions, links, toggle on).
     static let primary = adaptive(light: "#007078", dark: "#55CAD0")
     static let primarySoft = adaptive(light: "#43B6BB", dark: "#9FE8EA")
-    static let foreground = adaptive(light: "#0B1B20", dark: "#F0FBFC")
-    static let mutedForeground = adaptive(light: "#516970", dark: "#8CAAB1")
-    static let border = adaptive(light: "#C8DADA", dark: "#2B4952")
-    static let accent = adaptive(light: "#E3F2F1", dark: "#12313A")
-    static let destructive = adaptive(light: "#C42B2B", dark: "#F87171")
-    static let onDestructive = adaptive(light: "#FFFFFF", dark: "#FFFFFF")
-    static let logBackground = adaptive(light: "#EFF8F7", dark: "#081A22")
+    static let destructive = Color(nsColor: .systemRed)
+    static let onDestructive = Color.white
+    static let clearButtonBackground = destructive.opacity(0.85)
+    static let overlayBackground = Color.black.opacity(0.55)
+
+    // Semantic neutrals — prefer system colors so light/dark inherit correctly.
+    static var background: Color { Color(nsColor: .windowBackgroundColor) }
+    static var backgroundLifted: Color { Color(nsColor: .controlBackgroundColor) }
+    static var card: Color { Color(nsColor: .controlBackgroundColor) }
+    static var foreground: Color { Color(nsColor: .labelColor) }
+    static var mutedForeground: Color { Color(nsColor: .secondaryLabelColor) }
+    static var border: Color { Color(nsColor: .separatorColor) }
+    static var accent: Color { Color(nsColor: .controlBackgroundColor) }
+    static var logBackground: Color { Color(nsColor: .textBackgroundColor) }
+
+    /// Accent fill for selected sidebar rows (single selection language).
+    static var selectionFill: Color { primary.opacity(0.13) }
 
     static var backgroundGradient: LinearGradient {
         LinearGradient(
@@ -32,7 +40,9 @@ enum LivelyBrand {
     }
 
     enum Spacing {
+        static let tiny: CGFloat = 3
         static let xs: CGFloat = 4
+        static let xxs: CGFloat = 6
         static let sm: CGFloat = 8
         static let md: CGFloat = 12
         static let lg: CGFloat = 16
@@ -53,6 +63,16 @@ enum LivelyBrand {
         static let caption = Font.system(size: 12, weight: .medium)
         static let footnote = Font.system(size: 11, weight: .regular)
         static let mono = Font.system(size: 12, weight: .medium, design: .monospaced)
+        static let badge = Font.system(size: 9, weight: .bold)
+        static let iconSmall = Font.system(size: 20)
+        static let iconLarge = Font.system(size: 28)
+    }
+
+    enum Shadow {
+        static let color = Color.black.opacity(0.15)
+        static let radius: CGFloat = 4
+        static let x: CGFloat = 0
+        static let y: CGFloat = 2
     }
 
     enum Motion {

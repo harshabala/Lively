@@ -103,7 +103,7 @@ public class ConfigStore: ObservableObject {
         )
         configs[key] = config
         persist()
-        LivelyLogger.config.info("Assigned dynamic wallpaper to \(key)")
+        LivelyLogger.config.info("Assigned dynamic wallpaper to display \(Self.redactedSpaceKey(key))")
     }
 
     /// Resolves the URL for the current mode/appearance.
@@ -262,7 +262,15 @@ public class ConfigStore: ObservableObject {
     public func remove(spaceKey: String) {
         configs.removeValue(forKey: spaceKey)
         persist()
-        LivelyLogger.config.info("Removed assignment for \(spaceKey)")
+        LivelyLogger.config.info("Removed assignment for \(Self.redactedSpaceKey(spaceKey))")
+    }
+
+    /// Logs display ID only — never full file paths (spaceKey embeds desktop URLs).
+    static func redactedSpaceKey(_ key: String) -> String {
+        if let colon = key.firstIndex(of: ":") {
+            return String(key[..<colon])
+        }
+        return key
     }
 
     /// Deletes all saved configuration data from disk and memory.

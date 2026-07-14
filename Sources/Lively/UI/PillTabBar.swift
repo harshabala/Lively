@@ -13,7 +13,7 @@ struct PillTabBar<Selection: Hashable>: View {
                 tabButton(tab.label, value: tab.value, index: index, total: tabs.count)
             }
         }
-        .padding(3)
+        .padding(LivelyBrand.Spacing.tiny)
         .background(
             RoundedRectangle(cornerRadius: LivelyBrand.Radius.md)
                 .fill(LivelyBrand.foreground.opacity(0.05))
@@ -51,6 +51,7 @@ struct PillTabBar<Selection: Hashable>: View {
                 }
         }
         .buttonStyle(PressScaleButtonStyle())
+        .focusEffectDisabled()
         .accessibilityLabel(label)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityHint("Tab \(index + 1) of \(total)")

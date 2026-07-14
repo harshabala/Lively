@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import Combine
+import IOKit.ps
 
 // MARK: - WallpaperSession
 
@@ -62,23 +63,32 @@ private final class WallpaperSession {
 
     private func loadVideo(url: URL, muted: Bool, volume: Float, onError: @escaping @Sendable (Error) -> Void) {
         tearDownPlayer()
-        
+
+        let prefs = AppPreferences.shared
         let newPlayer = AVPlayer(url: url)
         newPlayer.isMuted = muted
         newPlayer.volume = volume
         newPlayer.preventsDisplaySleepDuringVideoPlayback = false
         newPlayer.automaticallyWaitsToMinimizeStalling = false
 
-        // Loop via notification
+        applyPreferences(to: newPlayer, prefs: prefs)
+
+        // Loop or freeze at end based on preference (captured for the observer).
+        let loopMode = prefs.loopBehavior
         loopObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: newPlayer.currentItem,
             queue: .main
         ) { [weak newPlayer] _ in
-            newPlayer?.seek(to: .zero)
-            newPlayer?.play()
+            switch loopMode {
+            case .loop:
+                newPlayer?.seek(to: .zero)
+                newPlayer?.play()
+            case .playOnceFreeze:
+                newPlayer?.pause()
+            }
         }
-        
+
         // Observe errors to bubble up
         // KVO callbacks can fire on arbitrary queues. By using Combine, we ensure
         // the closure executes on the main thread and avoids @MainActor isolation crashes.
@@ -96,6 +106,37 @@ private final class WallpaperSession {
         playerLayer.player = newPlayer
         self.player = newPlayer
         newPlayer.play()
+    }
+
+    private func applyPreferences(to player: AVPlayer, prefs: AppPreferences) {
+        let peak = prefs.playbackQuality.preferredPeakBitRate
+        if peak > 0 {
+            player.currentItem?.preferredPeakBitRate = peak
+        } else {
+            player.currentItem?.preferredPeakBitRate = 0
+        }
+
+        // When hardware decoding is off, cap resolution as a software-friendly budget.
+        if !prefs.hardwareDecoding {
+            player.currentItem?.preferredMaximumResolution = CGSize(width: 1920, height: 1080)
+        } else {
+            let maxH = prefs.maxResolution.preferredMaxHeight
+            if maxH > 0 {
+                player.currentItem?.preferredMaximumResolution = CGSize(width: maxH * 16 / 9, height: maxH)
+            } else {
+                player.currentItem?.preferredMaximumResolution = .zero
+            }
+        }
+    }
+
+    func applyPlaybackPreferences(_ prefs: AppPreferences = .shared) {
+        guard let player else { return }
+        applyPreferences(to: player, prefs: prefs)
+    }
+
+    /// Forces the next `play` call to rebuild the player (e.g. loop mode change).
+    func invalidatePlayback() {
+        currentURL = nil
     }
 
     /// Hides the window and stops playback.
@@ -140,7 +181,7 @@ private final class BookmarkManager {
     func urlForSpace(_ space: ScreenSpace, appearance: NSAppearance?) -> URL? {
         // Release scopes for other Spaces on the same display before starting a new one.
         let displayPrefix = "\(space.id):"
-        for key in activeScopes.keys where key.hasPrefix(displayPrefix) && key != space.spaceKey {
+        for key in Array(activeScopes.keys) where key.hasPrefix(displayPrefix) && key != space.spaceKey {
             stopScope(for: key)
         }
 
@@ -161,13 +202,13 @@ private final class BookmarkManager {
 
     func stopScopes(withDisplayID displayID: String) {
         let prefix = "\(displayID):"
-        for key in activeScopes.keys where key.hasPrefix(prefix) {
+        for key in Array(activeScopes.keys) where key.hasPrefix(prefix) {
             stopScope(for: key)
         }
     }
 
     func stopAllScopes() {
-        for key in activeScopes.keys {
+        for key in Array(activeScopes.keys) {
             stopScope(for: key)
         }
     }
@@ -261,6 +302,14 @@ public final class WallpaperController: ObservableObject {
 
     @Published public private(set) var isPaused = false
     @Published public private(set) var isThrottled = false
+    /// True when wallpapers are paused due to battery policy (threshold or hard 25% floor).
+    @Published public private(set) var isBatteryPaused = false
+    /// Current battery charge 0–100 when available; nil on desktops without a battery.
+    @Published public private(set) var batteryLevelPercent: Double?
+    /// True when the Mac is drawing from battery.
+    @Published public private(set) var isOnBattery = false
+    /// True when pause was forced by the hard 25% floor (vs user threshold).
+    @Published public private(set) var isForcedBatteryPause = false
     
     /// Bubbles up playback errors (spaceKey, Error message) to the UI
     public let playbackErrors = PassthroughSubject<(String, String), Never>()
@@ -269,27 +318,47 @@ public final class WallpaperController: ObservableObject {
 
     private let spaceMonitor: SpaceMonitor
     private let configStore: ConfigStore
+    private let preferences: AppPreferences
     private let bookmarkManager: BookmarkManager
     private let sessionManager: WallpaperSessionManager
     private var cancellables = Set<AnyCancellable>()
     
     private var appearanceObserver: AnyCancellable?
     private var thermalStateObserver: AnyCancellable?
+    private var powerSourceTimer: Timer?
 
     // MARK: - Init
 
-    public init(spaceMonitor: SpaceMonitor, configStore: ConfigStore) {
+    public init(
+        spaceMonitor: SpaceMonitor,
+        configStore: ConfigStore,
+        preferences: AppPreferences = .shared
+    ) {
         self.spaceMonitor = spaceMonitor
         self.configStore = configStore
+        self.preferences = preferences
         self.bookmarkManager = BookmarkManager(configStore: configStore)
         self.sessionManager = WallpaperSessionManager()
         
         let state = ProcessInfo.processInfo.thermalState
         self.isThrottled = state == .serious || state == .critical
+        let snap = PowerSourceMonitor.snapshot()
+        self.isOnBattery = snap.isOnBattery
+        self.batteryLevelPercent = snap.levelPercent
+        let decision = Self.batteryPauseDecision(
+            isOnBattery: snap.isOnBattery,
+            level: snap.levelPercent,
+            pauseEnabled: preferences.pauseOnBattery,
+            threshold: preferences.batteryPauseThreshold
+        )
+        self.isBatteryPaused = decision.shouldPause
+        self.isForcedBatteryPause = decision.isForcedFloor
         
         bind()
         setupAppearanceObserver()
         setupThermalStateObserver()
+        setupBatteryMonitor()
+        observePreferences()
     }
 
     // MARK: - Public Controls
@@ -302,6 +371,8 @@ public final class WallpaperController: ObservableObject {
         appearanceObserver = nil
         thermalStateObserver?.cancel()
         thermalStateObserver = nil
+        powerSourceTimer?.invalidate()
+        powerSourceTimer = nil
         cancellables.removeAll()
     }
 
@@ -310,14 +381,139 @@ public final class WallpaperController: ObservableObject {
         applyPlaybackState()
     }
 
+    private var shouldHaltPlayback: Bool {
+        isPaused || isThrottled || isBatteryPaused
+    }
+
     private func applyPlaybackState() {
-        if isPaused || isThrottled {
+        if shouldHaltPlayback {
             sessionManager.allSessions.values.forEach { $0.pause() }
         } else {
             // Re-sync rather than just resuming, so any config or space changes
             // that arrived while paused are picked up immediately.
             synchronize(to: spaceMonitor.screenSpaces)
         }
+    }
+
+    private func observePreferences() {
+        preferences.$pauseOnBattery
+            .combineLatest(preferences.$batteryPauseThreshold)
+            .dropFirst()
+            .sink { [weak self] _, _ in
+                self?.refreshBatteryState()
+            }
+            .store(in: &cancellables)
+
+        // Loop mode is captured when the player is created — full reload required.
+        preferences.$loopBehavior
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.sessionManager.allSessions.values.forEach { $0.invalidatePlayback() }
+                if !self.shouldHaltPlayback {
+                    self.synchronize(to: self.spaceMonitor.screenSpaces)
+                }
+            }
+            .store(in: &cancellables)
+
+        // Quality / decode budget can soft-apply without tearing down AVPlayers.
+        preferences.$playbackQuality
+            .combineLatest(preferences.$hardwareDecoding, preferences.$maxResolution)
+            .dropFirst()
+            .sink { [weak self] _, _, _ in
+                guard let self else { return }
+                self.sessionManager.allSessions.values.forEach {
+                    $0.applyPlaybackPreferences(self.preferences)
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func setupBatteryMonitor() {
+        // Lightweight poll — power-source CF notifications are awkward to bridge;
+        // 30s is enough for "pause on battery" without battery impact.
+        // Poll power source periodically (IOKit has no simple Combine publisher).
+        // 20s is responsive enough for "pause on battery" without busy-waiting.
+        powerSourceTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refreshBatteryState()
+            }
+        }
+        // Also refresh when Low Power Mode changes (related power policy signal).
+        NotificationCenter.default.publisher(for: Notification.Name("NSProcessInfoPowerStateDidChange"))
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] (_: Notification) in
+                self?.refreshBatteryState()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func refreshBatteryState() {
+        let snap = PowerSourceMonitor.snapshot()
+        let decision = Self.batteryPauseDecision(
+            isOnBattery: snap.isOnBattery,
+            level: snap.levelPercent,
+            pauseEnabled: preferences.pauseOnBattery,
+            threshold: preferences.batteryPauseThreshold
+        )
+
+        let levelChanged = batteryLevelPercent != snap.levelPercent
+        let onBatteryChanged = isOnBattery != snap.isOnBattery
+        let pauseChanged = isBatteryPaused != decision.shouldPause
+            || isForcedBatteryPause != decision.isForcedFloor
+
+        isOnBattery = snap.isOnBattery
+        batteryLevelPercent = snap.levelPercent
+        isForcedBatteryPause = decision.isForcedFloor
+
+        guard pauseChanged || levelChanged || onBatteryChanged else { return }
+
+        if pauseChanged {
+            isBatteryPaused = decision.shouldPause
+            applyPlaybackState()
+            if decision.shouldPause {
+                let pct = snap.levelPercent.map { String(format: "%.0f%%" , $0) } ?? "unknown"
+                if decision.isForcedFloor {
+                    LivelyLogger.wallpaper.info("Paused wallpapers — battery at \(pct) (hard floor 25%)")
+                } else {
+                    LivelyLogger.wallpaper.info("Paused wallpapers — battery at \(pct) (threshold \(Int(preferences.batteryPauseThreshold))%)")
+                }
+            } else {
+                LivelyLogger.wallpaper.info("Resumed wallpapers — AC power or battery above threshold")
+            }
+        }
+    }
+
+    /// Battery pause policy:
+    /// - On AC: never pause for battery.
+    /// - On battery at/below 25%: always pause (forced floor).
+    /// - On battery with "Pause on Battery" on: pause when level ≤ user threshold.
+    nonisolated static func batteryPauseDecision(
+        isOnBattery: Bool,
+        level: Double?,
+        pauseEnabled: Bool,
+        threshold: Double
+    ) -> (shouldPause: Bool, isForcedFloor: Bool) {
+        guard isOnBattery else { return (false, false) }
+        let floor = AppPreferences.forcedBatteryPausePercent
+        let clampedThreshold = AppPreferences.clampThreshold(threshold)
+
+        if let level {
+            if level <= floor {
+                return (true, true)
+            }
+            if pauseEnabled && level <= clampedThreshold {
+                return (true, false)
+            }
+            return (false, false)
+        }
+
+        // Unknown level: if user enabled pause-on-battery, treat as pause while on battery.
+        if pauseEnabled {
+            return (true, false)
+        }
+        return (false, false)
     }
 
     // MARK: - Reactive Bindings
@@ -377,7 +573,7 @@ public final class WallpaperController: ObservableObject {
             appearance: appearance,
             configStore: configStore,
             bookmarkManager: bookmarkManager,
-            isPaused: isPaused || isThrottled,
+            isPaused: shouldHaltPlayback,
             onPlaybackError: { [weak self] spaceKey, message in
                 Task { @MainActor in
                     self?.playbackErrors.send((spaceKey, message))
@@ -385,4 +581,54 @@ public final class WallpaperController: ObservableObject {
             }
         )
     }
+}
+
+// MARK: - Power Source
+
+enum PowerSourceMonitor {
+    struct Snapshot {
+        var isOnBattery: Bool
+        /// 0–100 when known.
+        var levelPercent: Double?
+    }
+
+    static func snapshot() -> Snapshot {
+        guard
+            let blob = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+            let list = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef]
+        else {
+            return Snapshot(
+                isOnBattery: ProcessInfo.processInfo.isLowPowerModeEnabled,
+                levelPercent: nil
+            )
+        }
+
+        var onBattery = false
+        var level: Double?
+
+        for source in list {
+            guard
+                let desc = IOPSGetPowerSourceDescription(blob, source)?.takeUnretainedValue() as? [String: Any]
+            else { continue }
+
+            if let state = desc[kIOPSPowerSourceStateKey] as? String,
+               state == kIOPSBatteryPowerValue {
+                onBattery = true
+            }
+            // Current capacity is typically 0–100 for internal batteries.
+            if let capacity = desc[kIOPSCurrentCapacityKey] as? Int {
+                level = Double(capacity)
+            } else if let capacity = desc[kIOPSCurrentCapacityKey] as? Double {
+                level = capacity
+            }
+        }
+
+        if !onBattery && list.isEmpty {
+            onBattery = ProcessInfo.processInfo.isLowPowerModeEnabled
+        }
+
+        return Snapshot(isOnBattery: onBattery, levelPercent: level)
+    }
+
+    static var isOnBattery: Bool { snapshot().isOnBattery }
 }

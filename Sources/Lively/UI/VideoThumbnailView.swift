@@ -40,7 +40,9 @@ private final class ThumbnailLoader {
 
     func load(url: URL) async {
         isLoading = true
-        image = await generateThumbnail(for: url)
+        let result = await generateThumbnail(for: url)
+        guard !Task.isCancelled else { return }
+        image = result
         isLoading = false
     }
 
@@ -52,7 +54,11 @@ private final class ThumbnailLoader {
 
 struct VideoThumbnailView: View {
     let url: URL
-    @State private var loader = ThumbnailLoader()
+    var height: CGFloat = 90
+    var cornerRadius: CGFloat = LivelyBrand.Radius.sm
+    var showLabels: Bool = true
+
+    @ViewState private var loader = ThumbnailLoader()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -61,42 +67,41 @@ struct VideoThumbnailView: View {
                 Image(nsImage: thumbnail)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 90)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
-                    .clipShape(.rect(cornerRadius: LivelyBrand.Radius.sm))
+                    .clipShape(.rect(cornerRadius: cornerRadius))
                     .transition(.asymmetric(
                         insertion: .opacity.combined(with: .offset(y: 4)),
                         removal: .opacity
                     ))
             } else if loader.isLoading {
-                RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
-                    .fill(LivelyBrand.accent.opacity(0.72))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 90)
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(Color(nsColor: .controlBackgroundColor))
                     .overlay {
                         ProgressView()
                             .scaleEffect(0.6)
                     }
                     .transition(.opacity)
             } else {
-                RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
-                    .fill(LivelyBrand.accent.opacity(0.72))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 90)
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(Color(nsColor: .controlBackgroundColor))
                     .overlay {
                         VStack(spacing: 4) {
                             Image(systemName: "film")
-                                .font(.system(size: 18))
+                                .font(.system(size: showLabels ? 18 : 12))
                                 .foregroundStyle(LivelyBrand.mutedForeground)
-                            Text("No preview")
-                                .font(LivelyBrand.Typography.footnote)
-                                .foregroundStyle(LivelyBrand.mutedForeground)
+                            if showLabels {
+                                Text("No preview")
+                                    .font(LivelyBrand.Typography.footnote)
+                                    .foregroundStyle(LivelyBrand.mutedForeground)
+                            }
                         }
                     }
                     .transition(.opacity)
             }
         }
+        .frame(maxWidth: .infinity)
+        .frame(height: height)
         .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: loader.image != nil)
         .animation(reduceMotion ? nil : LivelyBrand.Motion.fast, value: loader.isLoading)
         .onChange(of: url) { _, _ in loader.reset() }

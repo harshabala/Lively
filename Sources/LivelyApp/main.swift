@@ -58,9 +58,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let hosting = NSHostingController(rootView: view)
 
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 480, height: 560)
+        popover.contentSize = SettingsContainerView.windowSize
         popover.behavior = .transient
         popover.contentViewController = hosting
+
+        // Start Minimized off → open settings once after launch.
+        if !AppPreferences.shared.startMinimized {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                self?.showPopover(nil)
+            }
+        }
+
+        // Apply saved appearance (Light / Dark / System) before first paint.
+        AppPreferences.applyAppAppearance(AppPreferences.shared.appearance)
+
+        if AppPreferences.shared.checkForUpdates {
+            Task { await UpdateChecker.shared.checkIfEnabled() }
+        }
     }
 
     @objc private func togglePopover(_ sender: AnyObject?) {

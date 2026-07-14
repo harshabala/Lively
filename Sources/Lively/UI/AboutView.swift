@@ -2,7 +2,12 @@ import SwiftUI
 import AppKit
 
 public struct AboutView: View {
-    public init() {}
+    /// Compact layout for the Settings sidebar pane (matches design collage).
+    public var compact: Bool
+
+    public init(compact: Bool = false) {
+        self.compact = compact
+    }
 
     private var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -11,6 +16,112 @@ public struct AboutView: View {
     }
 
     public var body: some View {
+        if compact {
+            compactBody
+        } else {
+            legacyBody
+        }
+    }
+
+    // MARK: - Settings → About (collage)
+
+    private var compactBody: some View {
+        VStack(spacing: LivelyBrand.Spacing.lg) {
+            VStack(spacing: LivelyBrand.Spacing.md) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(LivelyBrand.primary.opacity(0.12))
+                        .frame(width: 64, height: 64)
+                    if let appIcon = NSImage(named: NSImage.applicationIconName) {
+                        Image(nsImage: appIcon)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 48, height: 48)
+                    } else {
+                        Image(systemName: "play.tv.fill")
+                            .font(.system(size: 28, weight: .semibold))
+                            .foregroundStyle(LivelyBrand.primary)
+                    }
+                }
+
+                Text("Lively")
+                    .font(LivelyBrand.Typography.title)
+                Text(appVersion)
+                    .font(LivelyBrand.Typography.mono)
+                    .foregroundStyle(LivelyBrand.mutedForeground)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, LivelyBrand.Spacing.sm)
+
+            VStack(spacing: 0) {
+                linkRow(title: "View on GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: githubURL)
+                Divider().overlay(LivelyBrand.border.opacity(0.3))
+                linkRow(title: "Report an Issue", systemImage: "exclamationmark.bubble", url: issuesURL)
+                Divider().overlay(LivelyBrand.border.opacity(0.3))
+                linkRow(title: "Privacy Policy", systemImage: "hand.raised", url: privacyURL)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: LivelyBrand.Radius.lg)
+                    .fill(LivelyBrand.card.opacity(0.92))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: LivelyBrand.Radius.lg)
+                    .strokeBorder(LivelyBrand.border.opacity(0.35))
+            )
+
+            Text(String(format: "© %d Harsha Balakrishnan. All rights reserved.", Calendar.current.component(.year, from: Date())))
+                .font(LivelyBrand.Typography.footnote)
+                .foregroundStyle(LivelyBrand.mutedForeground)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, LivelyBrand.Spacing.sm)
+        }
+    }
+
+    private func linkRow(title: String, systemImage: String, url: URL?) -> some View {
+        Button {
+            if let url {
+                NSWorkspace.shared.open(url)
+            }
+        } label: {
+            HStack(spacing: LivelyBrand.Spacing.md) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(LivelyBrand.primary)
+                    .frame(width: 20)
+                Text(title)
+                    .font(LivelyBrand.Typography.body.weight(.medium))
+                    .foregroundStyle(LivelyBrand.foreground)
+                Spacer()
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(LivelyBrand.mutedForeground)
+            }
+            .padding(.horizontal, LivelyBrand.Spacing.lg)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressScaleButtonStyle())
+        .focusEffectDisabled()
+        .disabled(url == nil)
+        .accessibilityLabel(title)
+        .accessibilityHint("Opens in browser")
+    }
+
+    private var githubURL: URL? {
+        URL(string: "https://github.com/harshabala/Lively")
+    }
+
+    private var issuesURL: URL? {
+        URL(string: "https://github.com/harshabala/Lively/issues")
+    }
+
+    private var privacyURL: URL? {
+        URL(string: "https://github.com/harshabala/Lively/blob/master/README.md#privacy")
+    }
+
+    // MARK: - Legacy layout (if reused elsewhere)
+
+    private var legacyBody: some View {
         HStack(alignment: .top, spacing: LivelyBrand.Spacing.xl) {
             VStack(alignment: .leading, spacing: LivelyBrand.Spacing.lg) {
                 HStack(alignment: .top, spacing: LivelyBrand.Spacing.lg) {

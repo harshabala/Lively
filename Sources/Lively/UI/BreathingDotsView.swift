@@ -3,7 +3,7 @@ import SwiftUI
 /// Design Spell: Three staggered breathing dots that replace boring ProgressView spinners.
 /// Each dot pulses in opacity and scale with a cascading delay — feels alive, not mechanical.
 struct BreathingDotsView: View {
-    @State private var phase = false
+    @ViewState private var phase = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let dotSize: CGFloat = 5

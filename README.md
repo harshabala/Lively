@@ -30,11 +30,11 @@ Lively is a native macOS menu-bar utility that plays looping, hardware-accelerat
 
 ## Download & install
 
-**Latest release: [v1.0.0](https://github.com/harshabala/Lively/releases/latest)** · [All releases](https://github.com/harshabala/Lively/releases)
+**Latest release: [v1.2.0](https://github.com/harshabala/Lively/releases/latest)** · [All releases](https://github.com/harshabala/Lively/releases)
 
 ### Option 1 — Download zip (recommended)
 
-1. Download **`Lively-1.0.0-macOS.zip`** from [GitHub Releases](https://github.com/harshabala/Lively/releases/latest)
+1. Download **`Lively-1.2.0-macOS.zip`** from [GitHub Releases](https://github.com/harshabala/Lively/releases/latest)
 2. Unzip and drag **`Lively.app`** to **Applications**
 3. Clear macOS download quarantine (required once — see below)
 4. Open Lively — look for the **play.tv** icon in the menu bar
