@@ -60,12 +60,17 @@ struct PillTabBar<Selection: Hashable>: View {
 }
 
 /// Lightweight pressed-state feedback for plain toolbar controls.
+/// Apple-style: respond on press-down (scale + opacity), critically damped spring.
 struct PressScaleButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(reduceMotion ? nil : LivelyBrand.Motion.fast, value: configuration.isPressed)
+            .opacity(configuration.isPressed ? 0.92 : 1.0)
+            .animation(
+                reduceMotion ? nil : .spring(duration: 0.15, bounce: 0),
+                value: configuration.isPressed
+            )
     }
 }
