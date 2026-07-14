@@ -5,171 +5,98 @@ import Foundation
 @Suite(.serialized)
 @MainActor
 struct WallpaperLibraryManagerTests {
-    
-    @Test func managerStatusDictionaryContainsAllCuratedItems() {
+
+    private func makeTempVideo(named name: String = "clip.mp4") throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "-" + name)
+        try Data("fake-video".utf8).write(to: url)
+        return url
+    }
+
+    @Test func startsEmpty() {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let manager = WallpaperLibraryManager(libraryDir: tempDir)
         defer { try? FileManager.default.removeItem(at: tempDir) }
-        
-        #expect(manager.downloadStatuses.count == CuratedWallpaper.curatedList.count)
-        
-        for wallpaper in CuratedWallpaper.curatedList {
-            #expect(manager.downloadStatuses[wallpaper.id] == .notDownloaded)
-        }
+
+        #expect(manager.items.isEmpty)
     }
-    
-    @Test func localURLMatchesCachePathFormat() {
+
+    @Test func addCopiesFileIntoLibrary() throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let manager = WallpaperLibraryManager(libraryDir: tempDir)
         defer { try? FileManager.default.removeItem(at: tempDir) }
-        
-        for wallpaper in CuratedWallpaper.curatedList {
-            let expectedURL = tempDir.appendingPathComponent("\(wallpaper.id).mp4")
-            
-            // localURL(for:) should return nil when not downloaded
-            #expect(manager.localURL(for: wallpaper) == nil)
-            
-            // Now mock the file existing
-            let dummyData = Data("dummy content".utf8)
-            let fileURL = tempDir.appendingPathComponent("\(wallpaper.id).mp4")
-            try? dummyData.write(to: fileURL)
-            
-            #expect(manager.localURL(for: wallpaper) == expectedURL)
-        }
+
+        let source = try makeTempVideo()
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        let item = try manager.add(from: source)
+        #expect(manager.items.count == 1)
+        #expect(item.name == source.deletingPathExtension().lastPathComponent)
+        #expect(manager.resolvedURL(for: item) != nil)
+        #expect(FileManager.default.fileExists(atPath: manager.fileURL(for: item).path))
+        // Original still present; library has its own copy
+        #expect(FileManager.default.fileExists(atPath: source.path))
     }
-    
-    @Test func checkLocalFilesUpdatesStatuses() {
+
+    @Test func addRejectsUnsupportedFormat() throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let manager = WallpaperLibraryManager(libraryDir: tempDir)
         defer { try? FileManager.default.removeItem(at: tempDir) }
-        
-        // Initially all are notDownloaded
-        for wallpaper in CuratedWallpaper.curatedList {
-            #expect(manager.downloadStatuses[wallpaper.id] == .notDownloaded)
+
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".txt")
+        try Data("nope".utf8).write(to: source)
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        #expect(throws: WallpaperLibraryManager.LibraryError.unsupportedFormat) {
+            try manager.add(from: source)
         }
-        
-        // Write a mock file for one wallpaper
-        let targetWallpaper = CuratedWallpaper.curatedList[0]
-        let fileURL = tempDir.appendingPathComponent("\(targetWallpaper.id).mp4")
-        let dummyData = Data("dummy content".utf8)
-        try? dummyData.write(to: fileURL)
-        
-        // Re-check files
-        manager.checkLocalFiles()
-        
-        #expect(manager.downloadStatuses[targetWallpaper.id] == .downloaded(localURL: fileURL))
-        
-        // Others should remain notDownloaded
-        for wallpaper in CuratedWallpaper.curatedList.dropFirst() {
-            #expect(manager.downloadStatuses[wallpaper.id] == .notDownloaded)
-        }
+        #expect(manager.items.isEmpty)
     }
 
-    @Test func downloadSuccessWritesToCachesDirectory() async {
+    @Test func removeDeletesFileAndIndexEntry() throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        
-        let config = URLSessionConfiguration.ephemeral
-        config.protocolClasses = [MockURLProtocol.self]
-        let mockSession = URLSession(configuration: config)
-        
-        let manager = WallpaperLibraryManager(libraryDir: tempDir, session: mockSession)
+        let manager = WallpaperLibraryManager(libraryDir: tempDir)
         defer { try? FileManager.default.removeItem(at: tempDir) }
-        
-        let targetWallpaper = CuratedWallpaper.curatedList[0]
-        let dummyData = Data("mock video content".utf8)
-        
-        MockURLProtocol.requestHandler = { request in
-            let response = HTTPURLResponse(
-                url: request.url!,
-                statusCode: 200,
-                httpVersion: "HTTP/1.1",
-                headerFields: ["Content-Length": String(dummyData.count)]
-            )!
-            return (response, dummyData)
-        }
-        
-        await manager.download(targetWallpaper)
-        
-        let expectedURL = tempDir.appendingPathComponent("\(targetWallpaper.id).mp4")
-        #expect(manager.downloadStatuses[targetWallpaper.id] == .downloaded(localURL: expectedURL))
-        #expect(FileManager.default.fileExists(atPath: expectedURL.path))
-        let savedData = try? Data(contentsOf: expectedURL)
-        #expect(savedData == dummyData)
+
+        let source = try makeTempVideo()
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        let item = try manager.add(from: source)
+        let stored = manager.fileURL(for: item)
+        #expect(FileManager.default.fileExists(atPath: stored.path))
+
+        manager.remove(item)
+        #expect(manager.items.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: stored.path))
     }
-    
-    @Test func downloadFailureSetsFailedStatus() async {
+
+    @Test func indexPersistsAcrossInstances() throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        
-        let config = URLSessionConfiguration.ephemeral
-        config.protocolClasses = [MockURLProtocol.self]
-        let mockSession = URLSession(configuration: config)
-        
-        let manager = WallpaperLibraryManager(libraryDir: tempDir, session: mockSession)
         defer { try? FileManager.default.removeItem(at: tempDir) }
-        
-        let targetWallpaper = CuratedWallpaper.curatedList[0]
-        
-        MockURLProtocol.requestHandler = { request in
-            let response = HTTPURLResponse(
-                url: request.url!,
-                statusCode: 404,
-                httpVersion: "HTTP/1.1",
-                headerFields: nil
-            )!
-            return (response, Data())
-        }
-        
-        await manager.download(targetWallpaper)
-        
-        if case .failed(let message) = manager.downloadStatuses[targetWallpaper.id] {
-            #expect(message.contains("Invalid HTTP status code: 404"))
-        } else {
-            Issue.record("Expected download status to be failed, but got: \(String(describing: manager.downloadStatuses[targetWallpaper.id]))")
-        }
-        
-        // Also test network connection failure throwing error
-        MockURLProtocol.requestHandler = { request in
-            throw NSError(domain: "NSURLErrorDomain", code: URLError.notConnectedToInternet.rawValue, userInfo: nil)
-        }
-        
-        // Clear status first
-        manager.downloadStatuses[targetWallpaper.id] = .notDownloaded
-        await manager.download(targetWallpaper)
-        
-        if case .failed(let message) = manager.downloadStatuses[targetWallpaper.id] {
-            #expect(!message.isEmpty)
-        } else {
-            Issue.record("Expected download status to be failed after connection error")
-        }
-    }
-}
 
-class MockURLProtocol: URLProtocol {
-    nonisolated(unsafe) static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
+        let source = try makeTempVideo(named: "aurora.mp4")
+        defer { try? FileManager.default.removeItem(at: source) }
 
-    override class func canInit(with request: URLRequest) -> Bool {
-        return true
+        let first = WallpaperLibraryManager(libraryDir: tempDir)
+        let item = try first.add(from: source)
+        #expect(first.items.count == 1)
+
+        let second = WallpaperLibraryManager(libraryDir: tempDir)
+        #expect(second.items.count == 1)
+        #expect(second.items[0].id == item.id)
+        #expect(second.items[0].name == item.name)
+        #expect(second.resolvedURL(for: second.items[0]) != nil)
     }
 
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
-        return request
-    }
+    @Test func renameUpdatesDisplayName() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let manager = WallpaperLibraryManager(libraryDir: tempDir)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
 
-    override func startLoading() {
-        guard let handler = MockURLProtocol.requestHandler else {
-            client?.urlProtocol(self, didFailWithError: NSError(domain: "MockURLProtocol", code: 0, userInfo: nil))
-            return
-        }
-        
-        do {
-            let (response, data) = try handler(request)
-            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(self, didLoad: data)
-            client?.urlProtocolDidFinishLoading(self)
-        } catch {
-            client?.urlProtocol(self, didFailWithError: error)
-        }
-    }
+        let source = try makeTempVideo(named: "raw.mp4")
+        defer { try? FileManager.default.removeItem(at: source) }
 
-    override func stopLoading() {}
+        let item = try manager.add(from: source)
+        manager.rename(item, to: "Mountain Loop")
+        #expect(manager.items.first?.name == "Mountain Loop")
+    }
 }

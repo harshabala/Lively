@@ -120,10 +120,10 @@ public struct DisplaysView: View {
                     .foregroundStyle(LivelyBrand.primary)
                 
                 VStack(alignment: .leading, spacing: LivelyBrand.Spacing.tiny) {
-                    Text("Explore Wallpaper Library")
+                    Text("Wallpaper Library")
                         .font(LivelyBrand.Typography.body.weight(.semibold))
                         .foregroundStyle(LivelyBrand.foreground)
-                    Text("No videos downloaded? Choose from our curated templates.")
+                    Text("Save videos once and reuse them on any display.")
                         .font(LivelyBrand.Typography.footnote)
                         .foregroundStyle(LivelyBrand.mutedForeground)
                         .multilineTextAlignment(.leading)
@@ -154,8 +154,8 @@ public struct DisplaysView: View {
             isLibraryButtonHovered = hovering
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Explore Curated Wallpaper Library")
-        .accessibilityHint("Click to open the gallery of curated live wallpapers.")
+        .accessibilityLabel("Open Wallpaper Library")
+        .accessibilityHint("Open your reusable wallpaper library to add or apply videos.")
     }
 
     private func sectionLabel(_ title: String, icon: String) -> some View {

@@ -175,19 +175,54 @@ public struct SettingsContainerView: View {
 
     // MARK: - Status banners
 
+    private enum StatusBannerKind: Equatable, Hashable {
+        case update(String)
+        case thermal
+        case battery
+        case manualPause
+    }
+
+    private var activeBannerKinds: [StatusBannerKind] {
+        var kinds: [StatusBannerKind] = []
+        if let version = updateChecker.availableVersion {
+            kinds.append(.update(version))
+        }
+        if wallpaperController.isThrottled {
+            kinds.append(.thermal)
+        } else if wallpaperController.isBatteryPaused {
+            kinds.append(.battery)
+        } else if wallpaperController.isPaused {
+            kinds.append(.manualPause)
+        }
+        return kinds
+    }
+
     @ViewBuilder
     private var statusBanners: some View {
-        if let version = updateChecker.availableVersion {
-            updateBanner(version: version)
+        VStack(spacing: 0) {
+            ForEach(activeBannerKinds, id: \.self) { kind in
+                bannerView(for: kind)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .offset(y: -4)),
+                        removal: .opacity
+                    ))
+            }
         }
+        .animation(reduceMotion ? nil : LivelyBrand.Motion.fast, value: activeBannerKinds)
+    }
 
-        if wallpaperController.isThrottled {
+    @ViewBuilder
+    private func bannerView(for kind: StatusBannerKind) -> some View {
+        switch kind {
+        case .update(let version):
+            updateBanner(version: version)
+        case .thermal:
             statusBanner(
                 icon: "thermometer.medium",
                 text: "Mac running hot. Lively paused to save battery.",
                 color: Color(nsColor: .systemOrange)
             )
-        } else if wallpaperController.isBatteryPaused {
+        case .battery:
             statusBanner(
                 icon: wallpaperController.isForcedBatteryPause ? "battery.0percent" : "battery.25",
                 text: batteryBannerText,
@@ -195,7 +230,7 @@ public struct SettingsContainerView: View {
                     ? Color(nsColor: .systemOrange)
                     : LivelyBrand.mutedForeground
             )
-        } else if wallpaperController.isPaused {
+        case .manualPause:
             statusBanner(
                 icon: "pause.circle.fill",
                 text: "Wallpapers paused. Press Resume Lively to play again.",

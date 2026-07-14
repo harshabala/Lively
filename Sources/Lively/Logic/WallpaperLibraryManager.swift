@@ -1,147 +1,148 @@
 import Foundation
+import AppKit
 import Combine
 
-public enum DownloadStatus: Equatable, Sendable {
-    case notDownloaded
-    case downloading(progress: Double)
-    case downloaded(localURL: URL)
-    case failed(String)
-}
-
+/// Manages the user's reusable wallpaper library (local files only).
+///
+/// Videos are copied into Application Support so assignments stay reliable
+/// even if the original file is moved. No remote catalog or downloads.
 @MainActor
-public final class WallpaperLibraryManager: NSObject, ObservableObject {
+public final class WallpaperLibraryManager: ObservableObject {
     public static let shared = WallpaperLibraryManager()
-    
-    public var downloadStatuses: [String: DownloadStatus] = [:] {
-        didSet {
-            _downloadStatusesPublisher.send(downloadStatuses)
-        }
-    }
-    private let _downloadStatusesPublisher = CurrentValueSubject<[String: DownloadStatus], Never>([:])
-    public var downloadStatusesPublisher: AnyPublisher<[String: DownloadStatus], Never> {
-        _downloadStatusesPublisher.eraseToAnyPublisher()
-    }
-    
+
+    @Published public private(set) var items: [LibraryWallpaper] = []
     @Published public var spaceKeyTarget: String?
-    
+
     public let libraryDir: URL
-    private let session: URLSession
-    
-    public init(libraryDir: URL? = nil, session: URLSession = .shared) {
-        self.session = session
-        if let libraryDir = libraryDir {
+    private let indexURL: URL
+    private let fileManager: FileManager
+
+    public init(libraryDir: URL? = nil, fileManager: FileManager = .default) {
+        self.fileManager = fileManager
+
+        if let libraryDir {
             self.libraryDir = libraryDir
-        } else if let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
-            self.libraryDir = cachesDir.appendingPathComponent("Lively/Library")
+        } else if let support = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            self.libraryDir = support.appendingPathComponent("Lively/Library", isDirectory: true)
         } else {
-            self.libraryDir = FileManager.default.temporaryDirectory.appendingPathComponent("Lively/Library")
+            self.libraryDir = fileManager.temporaryDirectory.appendingPathComponent("Lively/Library", isDirectory: true)
         }
-        
-        super.init()
-        
+        self.indexURL = self.libraryDir.appendingPathComponent("library_index.json")
+
         do {
-            try FileManager.default.createDirectory(at: self.libraryDir, withIntermediateDirectories: true)
+            try fileManager.createDirectory(at: self.libraryDir, withIntermediateDirectories: true)
         } catch {
             LivelyLogger.wallpaper.error("Failed to create library directory: \(error.localizedDescription)")
         }
-        
-        checkLocalFiles()
-    }
-    
-    public func checkLocalFiles() {
-        for wallpaper in CuratedWallpaper.curatedList {
-            let fileURL = libraryDir.appendingPathComponent("\(wallpaper.id).mp4")
-            if FileManager.default.fileExists(atPath: fileURL.path) {
-                downloadStatuses[wallpaper.id] = .downloaded(localURL: fileURL)
-            } else {
-                if case .downloading = downloadStatuses[wallpaper.id] {
-                    // Keep the current downloading status
-                } else {
-                    downloadStatuses[wallpaper.id] = .notDownloaded
-                }
-            }
-        }
-    }
-    
-    public func localURL(for wallpaper: CuratedWallpaper) -> URL? {
-        let fileURL = libraryDir.appendingPathComponent("\(wallpaper.id).mp4")
-        if FileManager.default.fileExists(atPath: fileURL.path) {
-            return fileURL
-        }
-        return nil
-    }
-    
-    public func download(_ wallpaper: CuratedWallpaper) async {
-        if case .downloaded = downloadStatuses[wallpaper.id] {
-            return
-        }
-        if case .downloading = downloadStatuses[wallpaper.id] {
-            return
-        }
-        
-        downloadStatuses[wallpaper.id] = .downloading(progress: 0.0)
-        
-        let delegate = DownloadProgressDelegate { [weak self] progress in
-            Task { @MainActor in
-                // Only update if we are still in downloading state
-                if case .downloading = self?.downloadStatuses[wallpaper.id] {
-                    self?.downloadStatuses[wallpaper.id] = .downloading(progress: progress)
-                }
-            }
-        }
-        
-        do {
-            let (tempURL, response) = try await session.download(from: wallpaper.remoteURL, delegate: delegate)
-            
-            guard let httpResponse = response as? HTTPURLResponse,
-                  (200...299).contains(httpResponse.statusCode) else {
-                let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-                throw NSError(domain: "WallpaperLibraryManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid HTTP status code: \(statusCode)"])
-            }
-            
-            let destinationURL = libraryDir.appendingPathComponent("\(wallpaper.id).mp4")
-            
-            // Remove existing file if any
-            if FileManager.default.fileExists(atPath: destinationURL.path) {
-                try? FileManager.default.removeItem(at: destinationURL)
-            }
-            
-            try FileManager.default.moveItem(at: tempURL, to: destinationURL)
-            
-            downloadStatuses[wallpaper.id] = .downloaded(localURL: destinationURL)
-            LivelyLogger.wallpaper.info("Successfully downloaded and saved wallpaper: \(wallpaper.id)")
-        } catch {
-            downloadStatuses[wallpaper.id] = .failed(error.localizedDescription)
-            LivelyLogger.wallpaper.error("Failed to download wallpaper \(wallpaper.id): \(error.localizedDescription)")
-        }
-    }
-}
 
-private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-    private let onProgress: @Sendable (Double) -> Void
-    
-    init(onProgress: @escaping @Sendable (Double) -> Void) {
-        self.onProgress = onProgress
-        super.init()
+        loadIndex()
+        reconcileMissingFiles()
     }
-    
-    func urlSession(
-        _ session: URLSession,
-        downloadTask: URLSessionDownloadTask,
-        didWriteData bytesWritten: Int64,
-        totalBytesWritten: Int64,
-        totalBytesExpectedToWrite: Int64
-    ) {
-        guard totalBytesExpectedToWrite > 0 else { return }
-        let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
-        onProgress(progress)
+
+    // MARK: - Paths
+
+    public func fileURL(for item: LibraryWallpaper) -> URL {
+        libraryDir.appendingPathComponent(item.fileName)
     }
-    
-    func urlSession(
-        _ session: URLSession,
-        downloadTask: URLSessionDownloadTask,
-        didFinishDownloadingTo location: URL
-    ) {
-        // Required but no-op, handled by the return value of download(from:delegate:)
+
+    public func resolvedURL(for item: LibraryWallpaper) -> URL? {
+        let url = fileURL(for: item)
+        guard fileManager.fileExists(atPath: url.path) else { return nil }
+        return url
+    }
+
+    // MARK: - Add / Remove
+
+    /// Copies a user-selected video into the library as a reusable wallpaper.
+    @discardableResult
+    public func add(from sourceURL: URL) throws -> LibraryWallpaper {
+        guard isValidLivelyVideoFile(sourceURL) else {
+            throw LibraryError.unsupportedFormat
+        }
+
+        let access = sourceURL.startAccessingSecurityScopedResource()
+        defer { if access { sourceURL.stopAccessingSecurityScopedResource() } }
+
+        let id = UUID().uuidString
+        let ext = sourceURL.pathExtension.isEmpty ? "mp4" : sourceURL.pathExtension.lowercased()
+        let fileName = "\(id).\(ext)"
+        let destination = libraryDir.appendingPathComponent(fileName)
+
+        if fileManager.fileExists(atPath: destination.path) {
+            try fileManager.removeItem(at: destination)
+        }
+        try fileManager.copyItem(at: sourceURL, to: destination)
+
+        let displayName = sourceURL.deletingPathExtension().lastPathComponent
+        let item = LibraryWallpaper(
+            id: id,
+            name: displayName.isEmpty ? "Wallpaper" : displayName,
+            fileName: fileName
+        )
+        items.insert(item, at: 0)
+        saveIndex()
+        LivelyLogger.wallpaper.info("Added library wallpaper: \(item.name)")
+        return item
+    }
+
+    public func remove(_ item: LibraryWallpaper) {
+        items.removeAll { $0.id == item.id }
+        let url = fileURL(for: item)
+        try? fileManager.removeItem(at: url)
+        saveIndex()
+        LivelyLogger.wallpaper.info("Removed library wallpaper: \(item.name)")
+    }
+
+    public func rename(_ item: LibraryWallpaper, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
+        items[index].name = trimmed
+        saveIndex()
+    }
+
+    // MARK: - Persistence
+
+    private func loadIndex() {
+        guard fileManager.fileExists(atPath: indexURL.path) else {
+            items = []
+            return
+        }
+        do {
+            let data = try Data(contentsOf: indexURL)
+            items = try JSONDecoder().decode([LibraryWallpaper].self, from: data)
+        } catch {
+            LivelyLogger.wallpaper.error("Failed to load library index: \(error.localizedDescription)")
+            items = []
+        }
+    }
+
+    private func saveIndex() {
+        do {
+            let data = try JSONEncoder().encode(items)
+            try data.write(to: indexURL, options: .atomic)
+        } catch {
+            LivelyLogger.wallpaper.error("Failed to save library index: \(error.localizedDescription)")
+        }
+    }
+
+    /// Drop index entries whose files disappeared.
+    private func reconcileMissingFiles() {
+        let before = items.count
+        items.removeAll { !fileManager.fileExists(atPath: fileURL(for: $0).path) }
+        if items.count != before {
+            saveIndex()
+        }
+    }
+
+    public enum LibraryError: LocalizedError {
+        case unsupportedFormat
+
+        public var errorDescription: String? {
+            switch self {
+            case .unsupportedFormat:
+                return "Only MP4, MOV, and M4V video files can be added to the library."
+            }
+        }
     }
 }

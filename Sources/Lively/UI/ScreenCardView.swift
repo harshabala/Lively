@@ -758,12 +758,29 @@ private struct DropZoneView: View {
                             ),
                             lineWidth: 2
                         )
+                        .onChange(of: isTargeted.wrappedValue) { _, targeted in
+                            if targeted && !reduceMotion {
+                                auroraRotation = 0
+                                withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
+                                    auroraRotation = 360
+                                }
+                            } else {
+                                withAnimation(nil) { auroraRotation = 0 }
+                            }
+                        }
                         .onAppear {
+                            guard isTargeted.wrappedValue, !reduceMotion else {
+                                auroraRotation = 0
+                                return
+                            }
+                            auroraRotation = 0
                             withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
                                 auroraRotation = 360
                             }
                         }
-                        .onDisappear { auroraRotation = 0 }
+                        .onDisappear {
+                            withAnimation(nil) { auroraRotation = 0 }
+                        }
                 } else {
                     RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
                         .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))

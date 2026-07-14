@@ -153,22 +153,39 @@ public struct PreferencesView: View {
                 errorBanner(configErrorMessage)
                     .padding(.horizontal, LivelyBrand.Spacing.lg)
                     .padding(.top, LivelyBrand.Spacing.md)
+                    .transition(.opacity)
             }
 
-            switch section {
-            case .general:
-                generalPane
-            case .playback:
-                playbackPane
-            case .screenSetup:
-                screenSetupPane
-            case .logs:
-                logsPane
-            case .about:
-                aboutPane
+            ZStack(alignment: .topLeading) {
+                switch section {
+                case .general:
+                    generalPane
+                        .transition(paneTransition)
+                case .playback:
+                    playbackPane
+                        .transition(paneTransition)
+                case .screenSetup:
+                    screenSetupPane
+                        .transition(paneTransition)
+                case .logs:
+                    logsPane
+                        .transition(paneTransition)
+                case .about:
+                    aboutPane
+                        .transition(paneTransition)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: section)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var paneTransition: AnyTransition {
+        .asymmetric(
+            insertion: .opacity.combined(with: .offset(y: 6)),
+            removal: .opacity.combined(with: .offset(y: -3))
+        )
     }
 
     private func paneHeader(title: String, subtitle: String) -> some View {
