@@ -72,8 +72,10 @@ First public release. Lively is open source under the MIT License.
 
 - H.264 and HEVC only — re-encode other codecs before use
 - Unsandboxed — required for desktop-layer video; not Mac App Store ready as-is
-- No in-app auto-update — check GitHub Releases manually
+- No automatic download/install of updates — optional check shows a banner and opens GitHub Releases
 - No playlists, schedules, or cross-Mac sync
 - Distribution builds require Developer ID signing and notarization for Gatekeeper outside your machine
 
+[1.2.0]: https://github.com/harshabala/Lively/releases/tag/v1.2.0
+[1.1.1]: https://github.com/harshabala/Lively/releases/tag/v1.1.1
 [1.0.0]: https://github.com/harshabala/Lively/releases/tag/v1.0.0
