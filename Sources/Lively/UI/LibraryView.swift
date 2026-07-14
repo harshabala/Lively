@@ -175,6 +175,10 @@ public struct LibraryView: View {
                         onApply: { url in
                             applyWallpaper(localURL: url)
                         },
+                        onApplyAll: { url in
+                            applyWallpaperToAllDisplays(localURL: url)
+                        },
+                        showApplyAll: spaceMonitor.screenSpaces.count > 1,
                         onRemove: {
                             libraryManager.remove(item)
                         }
@@ -231,6 +235,18 @@ public struct LibraryView: View {
         wallpaperConfig.mode = .staticVideo
         wallpaperConfig.staticURL = localURL
         configStore.assign(dynamicWallpaper: wallpaperConfig, toSpaceKey: spaceKey)
+        AppMetrics.shared.recordWallpaperApplied()
+        addError = nil
+    }
+
+    private func applyWallpaperToAllDisplays(localURL: URL) {
+        let keys = spaceMonitor.screenSpaces.map(\.spaceKey)
+        guard !keys.isEmpty else {
+            addError = "No display available to apply this wallpaper."
+            return
+        }
+        configStore.applyStaticWallpaper(localURL, toAllSpaceKeys: keys)
+        AppMetrics.shared.recordWallpaperApplied()
         addError = nil
     }
 
@@ -270,6 +286,8 @@ public struct LibraryCard: View {
     public let item: LibraryWallpaper
     public let fileURL: URL?
     public let onApply: @MainActor (URL) -> Void
+    public let onApplyAll: @MainActor (URL) -> Void
+    public var showApplyAll: Bool = false
     public let onRemove: @MainActor () -> Void
 
     @ViewState private var isHovered = false
@@ -347,6 +365,20 @@ public struct LibraryCard: View {
                                 .frame(minHeight: LivelyBrand.Spacing.controlMin - 8)
                         }
                         .buttonStyle(PressScaleButtonStyle())
+                        .livelyFocusRing(cornerRadius: LivelyBrand.Radius.sm)
+
+                        if showApplyAll {
+                            Button {
+                                onApplyAll(fileURL)
+                            } label: {
+                                Text("All displays")
+                                    .font(LivelyBrand.Typography.caption.weight(.medium))
+                                    .foregroundStyle(LivelyBrand.mutedForeground)
+                                    .frame(minHeight: LivelyBrand.Spacing.controlMin - 8)
+                            }
+                            .buttonStyle(PressScaleButtonStyle())
+                            .livelyFocusRing(cornerRadius: LivelyBrand.Radius.sm)
+                        }
                     } else {
                         Text("File missing")
                             .font(LivelyBrand.Typography.footnote)
@@ -364,6 +396,7 @@ public struct LibraryCard: View {
                             .frame(minHeight: LivelyBrand.Spacing.controlMin - 8)
                     }
                     .buttonStyle(PressScaleButtonStyle())
+                    .livelyFocusRing(cornerRadius: LivelyBrand.Radius.sm)
                     .accessibilityLabel("Remove \(item.name)")
                 }
             }

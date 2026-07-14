@@ -11,8 +11,15 @@ private let supportedCodecs: [FourCharCode] = [kCMVideoCodecType_H264, kCMVideoC
 struct ScreenCardView: View {
     let space: ScreenSpace
     let configStore: ConfigStore
+    @ObservedObject var spaceMonitor: SpaceMonitor
     /// 1-based index among connected displays (Display 1, Display 2, …).
     var displayIndex: Int = 1
+    /// First display receives welcome-sheet “Choose a video…” file picker.
+    var isPrimaryDisplay: Bool = false
+
+    @ObservedObject private var preferences = AppPreferences.shared
+    @EnvironmentObject var wallpaperController: WallpaperController
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @ViewState private var currentConfig: SpaceConfig?
     @ViewState private var isTargetedMain = false
@@ -25,15 +32,13 @@ struct ScreenCardView: View {
     @ViewState private var resolvedLightURL: URL?
     @ViewState private var resolvedDarkURL: URL?
 
-    @EnvironmentObject var wallpaperController: WallpaperController
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     @ViewState private var errorMessage: String?
     @ViewState private var errorClearTask: Task<Void, Swift.Error>?
-    
-    @ViewState private var showSuccessToast = false
-    @ViewState private var toastTask: Task<Void, Swift.Error>?
-    // auroraRotation is owned per-DropZoneView instance (see C-1 fix below)
+
+    /// Sticky success chip (not auto-dismiss) after assign.
+    @ViewState private var showPlayingBanner = false
+    @ViewState private var showSpacesCoach = false
+    @ViewState private var showApplyAllConfirm = false
 
     private var config: SpaceConfig? { currentConfig }
 
@@ -84,36 +89,26 @@ struct ScreenCardView: View {
             .padding(.horizontal, LivelyBrand.Spacing.md)
             .padding(.vertical, LivelyBrand.Spacing.md)
 
-            HStack(spacing: 12) {
+            if hasMissingAssignment {
+                missingFileBanner
+                    .padding(.horizontal, LivelyBrand.Spacing.md)
+                    .padding(.bottom, LivelyBrand.Spacing.sm)
+                    .transition(LivelyBrand.contentTransition)
+            }
+
+            HStack(spacing: LivelyBrand.Spacing.md) {
                 dropZone(
                     title: currentWallpaper.mode == .appearance ? "Light mode" : "",
                     icon: currentWallpaper.mode == .appearance ? "sun.max.fill" : "film",
                     url: currentWallpaper.mode == .appearance ? resolvedLightURL : resolvedStaticURL,
                     isTargeted: currentWallpaper.mode == .appearance ? $isTargetedLight : $isTargetedMain,
                     isValidating: currentWallpaper.mode == .appearance ? $isValidatingLight : $isValidatingMain,
+                    fileMissing: currentWallpaper.mode == .staticVideo && hasMissingStatic,
                     onDrop: { url in
-                        let wasFirstTime = !AppMetrics.shared.isActivated
-                        var updated = currentWallpaper
-                        if updated.mode == .appearance {
-                            updated.lightURL = url
-                        } else {
-                            updated.staticURL = url
-                        }
-                        configStore.assign(dynamicWallpaper: updated, toSpaceKey: space.spaceKey)
-                        if wasFirstTime { showSuccessMessage() }
+                        acceptWallpaper(url, role: .mainOrLight)
                     },
                     onClear: {
-                        var updated = currentWallpaper
-                        if updated.mode == .appearance {
-                            updated.lightURL = nil
-                            if updated.darkURL == nil {
-                                configStore.remove(spaceKey: space.spaceKey)
-                            } else {
-                                configStore.assign(dynamicWallpaper: updated, toSpaceKey: space.spaceKey)
-                            }
-                        } else {
-                            configStore.remove(spaceKey: space.spaceKey)
-                        }
+                        clearMainOrLight()
                     }
                 )
 
@@ -124,21 +119,12 @@ struct ScreenCardView: View {
                         url: resolvedDarkURL,
                         isTargeted: $isTargetedDark,
                         isValidating: $isValidatingDark,
+                        fileMissing: hasMissingDark,
                         onDrop: { url in
-                            let wasFirstTime = !AppMetrics.shared.isActivated
-                            var updated = currentWallpaper
-                            updated.darkURL = url
-                            configStore.assign(dynamicWallpaper: updated, toSpaceKey: space.spaceKey)
-                            if wasFirstTime { showSuccessMessage() }
+                            acceptWallpaper(url, role: .dark)
                         },
                         onClear: {
-                            var updated = currentWallpaper
-                            updated.darkURL = nil
-                            if updated.lightURL == nil {
-                                configStore.remove(spaceKey: space.spaceKey)
-                            } else {
-                                configStore.assign(dynamicWallpaper: updated, toSpaceKey: space.spaceKey)
-                            }
+                            clearDark()
                         }
                     )
                     .transition(modeTransition)
@@ -146,6 +132,20 @@ struct ScreenCardView: View {
             }
             .padding(.horizontal, LivelyBrand.Spacing.md)
             .padding(.bottom, LivelyBrand.Spacing.md)
+
+            if showPlayingBanner {
+                stickyPlayingBanner
+                    .padding(.horizontal, LivelyBrand.Spacing.md)
+                    .padding(.bottom, LivelyBrand.Spacing.sm)
+                    .transition(LivelyBrand.contentTransition)
+            }
+
+            if showSpacesCoach {
+                spacesCoachBanner
+                    .padding(.horizontal, LivelyBrand.Spacing.md)
+                    .padding(.bottom, LivelyBrand.Spacing.sm)
+                    .transition(LivelyBrand.contentTransition)
+            }
 
             if config != nil {
                 displaySettingsSection
@@ -164,40 +164,17 @@ struct ScreenCardView: View {
         .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: currentWallpaper.mode)
         .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: config != nil)
         .overlay(alignment: .top) {
-            VStack(spacing: LivelyBrand.Spacing.sm) {
-                if let error = errorMessage {
-                    Text(error)
-                        .font(LivelyBrand.Typography.footnote.weight(.medium))
-                        .foregroundStyle(LivelyBrand.onDestructive)
-                        .padding(.horizontal, LivelyBrand.Spacing.md)
-                        .padding(.vertical, LivelyBrand.Spacing.xxs)
-                        .background(LivelyBrand.destructive.opacity(0.92))
-                        .clipShape(.rect(cornerRadius: LivelyBrand.Radius.sm))
-                        .padding(.top, LivelyBrand.Spacing.sm)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                        .zIndex(10)
-                }
-
-                if showSuccessToast {
-                    HStack(spacing: LivelyBrand.Spacing.xxs) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(LivelyBrand.primary)
-                        Text("Playing on this Space. Switch Spaces to set another.")
-                    }
+            if let error = errorMessage {
+                Text(error)
                     .font(LivelyBrand.Typography.footnote.weight(.medium))
-                    .foregroundStyle(LivelyBrand.foreground)
+                    .foregroundStyle(LivelyBrand.onDestructive)
                     .padding(.horizontal, LivelyBrand.Spacing.md)
-                    .padding(.vertical, LivelyBrand.Spacing.sm)
-                    .background(LivelyBrand.controlFill.opacity(0.95))
+                    .padding(.vertical, LivelyBrand.Spacing.xxs)
+                    .background(LivelyBrand.destructive.opacity(0.92))
                     .clipShape(.rect(cornerRadius: LivelyBrand.Radius.sm))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
-                            .strokeBorder(LivelyBrand.border.opacity(0.45))
-                    )
                     .padding(.top, LivelyBrand.Spacing.sm)
                     .transition(.move(edge: .top).combined(with: .opacity))
-                    .zIndex(11)
-                }
+                    .zIndex(10)
             }
         }
         .onReceive(wallpaperController.playbackErrors) { (targetSpaceKey, message) in
@@ -216,8 +193,166 @@ struct ScreenCardView: View {
                 || (currentConfig != nil && newConfig == nil) {
                 currentConfig = newConfig
                 refreshResolvedURLs()
+                if newConfig == nil {
+                    showPlayingBanner = false
+                }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .livelyRequestFirstVideoPick)) { _ in
+            guard isPrimaryDisplay else { return }
+            openFilePicker(isValidating: $isValidatingMain) { url in
+                acceptWallpaper(url, role: .mainOrLight)
+            }
+        }
+        .confirmationDialog(
+            "Apply this wallpaper to every connected display?",
+            isPresented: $showApplyAllConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Apply to All Displays") {
+                applyToAllDisplays()
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    // MARK: - Missing file / sticky banners
+
+    private var hasMissingStatic: Bool {
+        currentWallpaper.mode == .staticVideo
+            && currentWallpaper.staticURL != nil
+            && resolvedStaticURL == nil
+            && config != nil
+    }
+
+    private var hasMissingLight: Bool {
+        currentWallpaper.mode == .appearance
+            && currentWallpaper.lightURL != nil
+            && resolvedLightURL == nil
+    }
+
+    private var hasMissingDark: Bool {
+        currentWallpaper.mode == .appearance
+            && currentWallpaper.darkURL != nil
+            && resolvedDarkURL == nil
+    }
+
+    private var hasMissingAssignment: Bool {
+        hasMissingStatic || hasMissingLight || hasMissingDark
+    }
+
+    private var missingFileBanner: some View {
+        HStack(spacing: LivelyBrand.Spacing.sm) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(Color(nsColor: .systemOrange))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("File missing")
+                    .font(LivelyBrand.Typography.caption.weight(.semibold))
+                Text("The video was moved or deleted. Reselect it to restore this wallpaper.")
+                    .font(LivelyBrand.Typography.footnote)
+                    .foregroundStyle(LivelyBrand.mutedForeground)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            Button("Reselect…") {
+                let binding = hasMissingDark && !hasMissingStatic && !hasMissingLight
+                    ? $isValidatingDark
+                    : (hasMissingLight ? $isValidatingLight : $isValidatingMain)
+                openFilePicker(isValidating: binding) { url in
+                    if hasMissingDark && currentWallpaper.mode == .appearance && resolvedDarkURL == nil
+                        && currentWallpaper.darkURL != nil && resolvedLightURL != nil {
+                        acceptWallpaper(url, role: .dark)
+                    } else {
+                        acceptWallpaper(url, role: .mainOrLight)
+                    }
+                }
+            }
+            .buttonStyle(PressScaleButtonStyle())
+            .font(LivelyBrand.Typography.caption.weight(.semibold))
+            .foregroundStyle(LivelyBrand.primary)
+            .livelyFocusRing(cornerRadius: LivelyBrand.Radius.sm)
+        }
+        .padding(LivelyBrand.Spacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
+                .fill(Color(nsColor: .systemOrange).opacity(0.12))
+        )
+        .accessibilityElement(children: .combine)
+    }
+
+    private var stickyPlayingBanner: some View {
+        HStack(spacing: LivelyBrand.Spacing.sm) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(LivelyBrand.primary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Playing on this display")
+                    .font(LivelyBrand.Typography.caption.weight(.semibold))
+                if preferences.playbackQuality == .high {
+                    Text("If your Mac gets warm, try Power Saver under Settings → Playback.")
+                        .font(LivelyBrand.Typography.footnote)
+                        .foregroundStyle(LivelyBrand.mutedForeground)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
+            if spaceMonitor.screenSpaces.count > 1, currentWallpaper.staticURL != nil || resolvedStaticURL != nil {
+                Button("Apply to All") {
+                    showApplyAllConfirm = true
+                }
+                .font(LivelyBrand.Typography.footnote.weight(.semibold))
+                .foregroundStyle(LivelyBrand.primary)
+                .buttonStyle(PressScaleButtonStyle())
+            }
+            Button {
+                showPlayingBanner = false
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(LivelyBrand.mutedForeground)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PressScaleButtonStyle())
+            .accessibilityLabel("Dismiss playing status")
+        }
+        .padding(LivelyBrand.Spacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
+                .fill(LivelyBrand.primary.opacity(0.1))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
+                .strokeBorder(LivelyBrand.primary.opacity(0.22), lineWidth: 1)
+        )
+    }
+
+    private var spacesCoachBanner: some View {
+        HStack(spacing: LivelyBrand.Spacing.sm) {
+            Image(systemName: "rectangle.on.rectangle")
+                .foregroundStyle(LivelyBrand.primary)
+            Text("Tip: switch Spaces (Control + ←/→) to set a different wallpaper on another desktop.")
+                .font(LivelyBrand.Typography.footnote)
+                .foregroundStyle(LivelyBrand.foreground)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button("Got it") {
+                showSpacesCoach = false
+                preferences.hasSeenSpacesCoach = true
+            }
+            .font(LivelyBrand.Typography.caption.weight(.semibold))
+            .foregroundStyle(LivelyBrand.primary)
+            .buttonStyle(PressScaleButtonStyle())
+            .livelyFocusRing(cornerRadius: LivelyBrand.Radius.sm)
+        }
+        .padding(LivelyBrand.Spacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
+                .fill(LivelyBrand.controlFill.opacity(0.95))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
+                .strokeBorder(LivelyBrand.border.opacity(0.4), lineWidth: 1)
+        )
     }
 
     // MARK: Header
@@ -409,6 +544,7 @@ struct ScreenCardView: View {
         url: URL?,
         isTargeted: Binding<Bool>,
         isValidating: Binding<Bool>,
+        fileMissing: Bool = false,
         onDrop: @escaping @MainActor (URL) -> Void,
         onClear: @escaping @MainActor () -> Void
     ) -> some View {
@@ -418,6 +554,7 @@ struct ScreenCardView: View {
             url: url,
             isTargeted: isTargeted,
             isValidating: isValidating,
+            fileMissing: fileMissing,
             reduceMotion: reduceMotion,
             onFilePick: { openFilePicker(isValidating: isValidating, onPick: onDrop) },
             onURLDrop: { dropped in
@@ -432,18 +569,73 @@ struct ScreenCardView: View {
 
     // MARK: - Interactions
 
-    private func showSuccessMessage() {
-        showSuccessToast = true
-        AccessibilityNotification.Announcement("Playing on this Space. Switch Spaces to set another.").post()
-        toastTask?.cancel()
-        toastTask = Task { @MainActor in
-            do {
-                try await Task.sleep(for: .seconds(3))
-                showSuccessToast = false
-            } catch {
-                // Task was cancelled — do not update state
+    private enum WallpaperRole {
+        case mainOrLight
+        case dark
+    }
+
+    private func acceptWallpaper(_ url: URL, role: WallpaperRole) {
+        let wasFirstTime = !AppMetrics.shared.isActivated
+        var updated = currentWallpaper
+        switch role {
+        case .mainOrLight:
+            if updated.mode == .appearance {
+                updated.lightURL = url
+            } else {
+                updated.staticURL = url
             }
+        case .dark:
+            updated.darkURL = url
         }
+        configStore.assign(dynamicWallpaper: updated, toSpaceKey: space.spaceKey)
+        AppMetrics.shared.recordWallpaperApplied()
+        showPlayingBanner = true
+        AccessibilityNotification.Announcement("Playing on this display.").post()
+        if wasFirstTime || !preferences.hasSeenSpacesCoach {
+            showSpacesCoach = true
+        }
+    }
+
+    private func clearMainOrLight() {
+        var updated = currentWallpaper
+        if updated.mode == .appearance {
+            updated.lightURL = nil
+            if updated.darkURL == nil {
+                configStore.remove(spaceKey: space.spaceKey)
+            } else {
+                configStore.assign(dynamicWallpaper: updated, toSpaceKey: space.spaceKey)
+            }
+        } else {
+            configStore.remove(spaceKey: space.spaceKey)
+        }
+        showPlayingBanner = false
+    }
+
+    private func clearDark() {
+        var updated = currentWallpaper
+        updated.darkURL = nil
+        if updated.lightURL == nil {
+            configStore.remove(spaceKey: space.spaceKey)
+        } else {
+            configStore.assign(dynamicWallpaper: updated, toSpaceKey: space.spaceKey)
+        }
+    }
+
+    private func applyToAllDisplays() {
+        let url = resolvedStaticURL ?? currentWallpaper.staticURL
+        guard let url else { return }
+        let keys = spaceMonitor.screenSpaces.map(\.spaceKey)
+        configStore.applyStaticWallpaper(url, toAllSpaceKeys: keys)
+        showPlayingBanner = true
+        AccessibilityNotification.Announcement("Wallpaper applied to all displays.").post()
+    }
+
+    private func showSuccessMessage() {
+        showPlayingBanner = true
+        if !preferences.hasSeenSpacesCoach {
+            showSpacesCoach = true
+        }
+        AccessibilityNotification.Announcement("Playing on this display.").post()
     }
 
     private func showError(_ message: String) {
@@ -575,6 +767,7 @@ private struct DropZoneView: View {
     let url: URL?
     let isTargeted: Binding<Bool>
     let isValidating: Binding<Bool>
+    let fileMissing: Bool
     let reduceMotion: Bool
     let onFilePick: @MainActor () -> Void
     let onURLDrop: @MainActor (URL) -> Void
@@ -589,6 +782,8 @@ private struct DropZoneView: View {
                 progressView
             } else if let url = url {
                 activeVideoView(url: url)
+            } else if fileMissing {
+                missingPlaceholderView
             } else {
                 emptyPlaceholderView
             }
@@ -704,6 +899,25 @@ private struct DropZoneView: View {
                     .foregroundStyle(LivelyBrand.mutedForeground)
             }
         }
+    }
+
+    private var missingPlaceholderView: some View {
+        Button {
+            onFilePick()
+        } label: {
+            VStack(spacing: LivelyBrand.Spacing.xxs) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(LivelyBrand.Typography.iconLarge)
+                    .foregroundStyle(Color(nsColor: .systemOrange))
+                Text(title.isEmpty ? "File missing — click to reselect" : "\(title): file missing — reselect")
+                    .font(LivelyBrand.Typography.caption)
+                    .foregroundStyle(LivelyBrand.mutedForeground)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 80)
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder

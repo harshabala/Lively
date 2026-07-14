@@ -265,6 +265,16 @@ public class ConfigStore: ObservableObject {
         LivelyLogger.config.info("Removed assignment for \(Self.redactedSpaceKey(spaceKey))")
     }
 
+    /// Assigns the same static video wallpaper to every provided space key.
+    public func applyStaticWallpaper(_ url: URL, toAllSpaceKeys keys: [String]) {
+        for key in keys {
+            var wallpaper = configs[key]?.dynamicWallpaper ?? DynamicWallpaper()
+            wallpaper.mode = .staticVideo
+            wallpaper.staticURL = url
+            assign(dynamicWallpaper: wallpaper, toSpaceKey: key)
+        }
+    }
+
     /// Logs display ID only — never full file paths (spaceKey embeds desktop URLs).
     static func redactedSpaceKey(_ key: String) -> String {
         if let colon = key.firstIndex(of: ":") {

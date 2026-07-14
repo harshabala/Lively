@@ -6,6 +6,7 @@ import AppKit
 public struct DisplaysView: View {
     @ObservedObject public var spaceMonitor: SpaceMonitor
     public let configStore: ConfigStore
+    @ObservedObject private var preferences = AppPreferences.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ViewState private var displayedDays: Int = 0
     @ViewState private var isLibraryButtonHovered = false
@@ -18,11 +19,15 @@ public struct DisplaysView: View {
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: LivelyBrand.Spacing.xl) {
+                if !preferences.hasDismissedDisplaysTip {
+                    displaysTipStrip
+                }
+
                 screensSection
-                
+
                 Divider()
                     .overlay(LivelyBrand.border.opacity(0.45))
-                
+
                 metricsFooter
             }
             .padding(.horizontal, LivelyBrand.Spacing.xl)
@@ -30,6 +35,47 @@ public struct DisplaysView: View {
         }
         .scrollIndicators(.hidden)
         .foregroundStyle(LivelyBrand.foreground)
+    }
+
+    // MARK: - First-run tip
+
+    private var displaysTipStrip: some View {
+        HStack(alignment: .top, spacing: LivelyBrand.Spacing.sm) {
+            Image(systemName: "lightbulb.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(LivelyBrand.primary)
+                .padding(.top, 2)
+
+            Text("Drop a video on a display card, or click the zone to browse. H.264 / HEVC only.")
+                .font(LivelyBrand.Typography.caption)
+                .foregroundStyle(LivelyBrand.foreground)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: LivelyBrand.Spacing.xs)
+
+            Button {
+                preferences.hasDismissedDisplaysTip = true
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(LivelyBrand.mutedForeground)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PressScaleButtonStyle())
+            .livelyFocusRing(cornerRadius: 6)
+            .accessibilityLabel("Dismiss tip")
+        }
+        .padding(LivelyBrand.Spacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: LivelyBrand.Radius.md)
+                .fill(LivelyBrand.primary.opacity(0.1))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: LivelyBrand.Radius.md)
+                .strokeBorder(LivelyBrand.primary.opacity(0.22), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
     }
 
     private var screensSection: some View {
@@ -47,7 +93,9 @@ public struct DisplaysView: View {
                         ScreenCardView(
                             space: space,
                             configStore: configStore,
-                            displayIndex: index + 1
+                            spaceMonitor: spaceMonitor,
+                            displayIndex: index + 1,
+                            isPrimaryDisplay: index == 0
                         )
                         .transition(LivelyBrand.contentTransition)
                         .animation(
@@ -66,14 +114,16 @@ public struct DisplaysView: View {
     }
 
     private var emptyDisplaysView: some View {
-        VStack(alignment: .leading, spacing: LivelyBrand.Spacing.sm) {
+        VStack(alignment: .leading, spacing: LivelyBrand.Spacing.md) {
             Text("No displays detected")
                 .font(LivelyBrand.Typography.body.weight(.semibold))
                 .foregroundStyle(LivelyBrand.foreground)
-            Text("Connect a monitor or check that Screen Recording permission is enabled for Lively in System Settings.")
+            Text("Connect a monitor or enable Screen Recording for Lively so Spaces and displays can be detected.")
                 .font(LivelyBrand.Typography.caption)
                 .foregroundStyle(LivelyBrand.mutedForeground)
                 .fixedSize(horizontal: false, vertical: true)
+
+            openScreenRecordingSettingsButton
         }
         .padding(LivelyBrand.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -85,15 +135,21 @@ public struct DisplaysView: View {
             RoundedRectangle(cornerRadius: LivelyBrand.Radius.lg)
                 .strokeBorder(LivelyBrand.border.opacity(0.42))
         )
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 
     private var detectingView: some View {
-        HStack(spacing: LivelyBrand.Spacing.md) {
-            BreathingDotsView()
-            Text("Detecting displays...")
-                .font(LivelyBrand.Typography.body)
+        VStack(alignment: .leading, spacing: LivelyBrand.Spacing.md) {
+            HStack(spacing: LivelyBrand.Spacing.md) {
+                BreathingDotsView()
+                Text("Detecting displays...")
+                    .font(LivelyBrand.Typography.body)
+                    .foregroundStyle(LivelyBrand.mutedForeground)
+            }
+            Text("If this takes more than a few seconds, grant Screen Recording to Lively in System Settings.")
+                .font(LivelyBrand.Typography.footnote)
                 .foregroundStyle(LivelyBrand.mutedForeground)
+            openScreenRecordingSettingsButton
         }
         .padding(LivelyBrand.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -105,6 +161,39 @@ public struct DisplaysView: View {
             RoundedRectangle(cornerRadius: LivelyBrand.Radius.lg)
                 .strokeBorder(LivelyBrand.border.opacity(0.42))
         )
+    }
+
+    private var openScreenRecordingSettingsButton: some View {
+        Button {
+            openScreenRecordingPrivacySettings()
+        } label: {
+            Text("Open Screen Recording Settings")
+                .font(LivelyBrand.Typography.caption.weight(.semibold))
+                .foregroundStyle(LivelyBrand.primary)
+                .padding(.horizontal, LivelyBrand.Spacing.md)
+                .frame(minHeight: LivelyBrand.Spacing.controlMin)
+                .background(
+                    RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
+                        .fill(LivelyBrand.primary.opacity(0.12))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
+                        .strokeBorder(LivelyBrand.primary.opacity(0.28), lineWidth: 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm))
+        }
+        .buttonStyle(PressScaleButtonStyle())
+        .livelyFocusRing(cornerRadius: LivelyBrand.Radius.sm)
+        .accessibilityHint("Opens System Settings to the Screen Recording privacy pane")
+    }
+
+    private func openScreenRecordingPrivacySettings() {
+        // macOS Privacy & Security → Screen Recording
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+            NSWorkspace.shared.open(url)
+        } else {
+            NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Library/PreferencePanes/Security.prefPane"))
+        }
     }
 
     private var libraryButton: some View {
@@ -139,6 +228,7 @@ public struct DisplaysView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PressScaleButtonStyle())
+        .livelyFocusRing(cornerRadius: LivelyBrand.Radius.md)
         .background(
             RoundedRectangle(cornerRadius: LivelyBrand.Radius.md)
                 .fill(LivelyBrand.card.opacity(0.88))
@@ -164,7 +254,6 @@ public struct DisplaysView: View {
                     Text("Active")
                         .font(LivelyBrand.Typography.caption)
                         .foregroundStyle(LivelyBrand.mutedForeground)
-                    // Spell: number roll-up — count animates from 0 to real value on appear
                     Text("\(displayedDays)")
                         .font(LivelyBrand.Typography.caption.weight(.semibold))
                         .foregroundStyle(LivelyBrand.primary)
@@ -174,9 +263,6 @@ public struct DisplaysView: View {
                         .font(LivelyBrand.Typography.caption)
                         .foregroundStyle(LivelyBrand.mutedForeground)
                 }
-                // C-3: Split into two lines; together they read the full spec copy:
-                // "Counts days Lively was actively rendering."
-                // "Stored only on this device. Never uploaded."
                 Text("Counts days Lively was actively rendering.")
                     .font(LivelyBrand.Typography.footnote)
                     .foregroundStyle(LivelyBrand.mutedForeground.opacity(0.7))
@@ -203,7 +289,7 @@ public struct DisplaysView: View {
                             displayedDays = (i == steps) ? target : min(i * stepSize, target)
                         }
                     } catch {
-                        break // Exit immediately on cancellation
+                        break
                     }
                 }
             }

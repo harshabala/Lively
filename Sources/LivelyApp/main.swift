@@ -45,10 +45,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = statusItem.button {
-            button.image = NSImage(
-                systemSymbolName: "play.tv.fill",
-                accessibilityDescription: "Lively"
-            )
+            // Prefer branded app icon; fall back to SF Symbol for incomplete bundles.
+            if let appIcon = NSApp.applicationIconImage?.copy() as? NSImage {
+                appIcon.size = NSSize(width: 18, height: 18)
+                appIcon.isTemplate = false
+                button.image = appIcon
+            } else {
+                button.image = NSImage(
+                    systemSymbolName: "play.tv.fill",
+                    accessibilityDescription: "Lively"
+                )
+            }
+            button.toolTip = "Lively — video wallpapers"
             button.action = #selector(togglePopover(_:))
             button.target = self
         }

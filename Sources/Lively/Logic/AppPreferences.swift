@@ -132,6 +132,10 @@ public final class AppPreferences: ObservableObject {
         static let maxResolution = "prefs.maxResolution"
         static let frameRateCapLegacy = "prefs.frameRateCap"
         static let appearance = "prefs.appearance"
+        // First-run product coaching (product-review roadmap)
+        static let hasCompletedWelcome = "prefs.hasCompletedWelcome"
+        static let hasDismissedDisplaysTip = "prefs.hasDismissedDisplaysTip"
+        static let hasSeenSpacesCoach = "prefs.hasSeenSpacesCoach"
     }
 
     private let defaults: UserDefaults
@@ -185,6 +189,21 @@ public final class AppPreferences: ObservableObject {
         }
     }
 
+    /// First-launch welcome sheet completed (dismiss or choose video).
+    @Published public var hasCompletedWelcome: Bool {
+        didSet { defaults.set(hasCompletedWelcome, forKey: Keys.hasCompletedWelcome) }
+    }
+
+    /// Inline Displays tip strip dismissed forever.
+    @Published public var hasDismissedDisplaysTip: Bool {
+        didSet { defaults.set(hasDismissedDisplaysTip, forKey: Keys.hasDismissedDisplaysTip) }
+    }
+
+    /// One-time “Switch Spaces…” coach after first wallpaper.
+    @Published public var hasSeenSpacesCoach: Bool {
+        didSet { defaults.set(hasSeenSpacesCoach, forKey: Keys.hasSeenSpacesCoach) }
+    }
+
     public var frameRateCap: MaxResolution {
         get { maxResolution }
         set { maxResolution = newValue }
@@ -214,6 +233,9 @@ public final class AppPreferences: ObservableObject {
         self.checkForUpdates = defaults.bool(forKey: Keys.checkForUpdates)
         self.hardwareDecoding = defaults.bool(forKey: Keys.hardwareDecoding)
         self.batteryPauseThreshold = Self.clampThreshold(defaults.double(forKey: Keys.batteryPauseThreshold))
+        self.hasCompletedWelcome = defaults.bool(forKey: Keys.hasCompletedWelcome)
+        self.hasDismissedDisplaysTip = defaults.bool(forKey: Keys.hasDismissedDisplaysTip)
+        self.hasSeenSpacesCoach = defaults.bool(forKey: Keys.hasSeenSpacesCoach)
 
         let qualityRaw = defaults.string(forKey: Keys.playbackQuality) ?? PlaybackQuality.high.rawValue
         self.playbackQuality = PlaybackQuality(rawValue: qualityRaw) ?? .high

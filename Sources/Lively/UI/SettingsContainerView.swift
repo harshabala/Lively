@@ -26,32 +26,55 @@ public struct SettingsContainerView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            topChrome
+        ZStack {
+            VStack(spacing: 0) {
+                topChrome
 
-            statusBanners
+                statusBanners
 
-            ZStack {
-                switch selectedTab {
-                case .displays:
-                    DisplaysView(spaceMonitor: spaceMonitor, configStore: configStore)
-                        .transition(LivelyBrand.contentTransition)
-                case .settings:
-                    PreferencesView(
-                        spaceMonitor: spaceMonitor,
-                        configStore: configStore,
-                        section: $settingsSection,
-                        onOpenDisplays: {
-                            withAnimation(reduceMotion ? nil : LivelyBrand.Motion.normal) {
-                                selectedTab = .displays
+                ZStack {
+                    switch selectedTab {
+                    case .displays:
+                        DisplaysView(spaceMonitor: spaceMonitor, configStore: configStore)
+                            .transition(LivelyBrand.contentTransition)
+                    case .settings:
+                        PreferencesView(
+                            spaceMonitor: spaceMonitor,
+                            configStore: configStore,
+                            section: $settingsSection,
+                            onOpenDisplays: {
+                                withAnimation(reduceMotion ? nil : LivelyBrand.Motion.normal) {
+                                    selectedTab = .displays
+                                }
                             }
-                        }
-                    )
-                    .transition(LivelyBrand.contentTransition)
+                        )
+                        .transition(LivelyBrand.contentTransition)
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: selectedTab)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: selectedTab)
+
+            if !preferences.hasCompletedWelcome {
+                Color.black.opacity(0.28)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                    .accessibilityHidden(true)
+
+                WelcomeSheet(
+                    onChooseVideo: {
+                        preferences.hasCompletedWelcome = true
+                        preferences.hasDismissedDisplaysTip = true
+                        selectedTab = .displays
+                        NotificationCenter.default.post(name: .livelyRequestFirstVideoPick, object: nil)
+                    },
+                    onDismiss: {
+                        preferences.hasCompletedWelcome = true
+                    }
+                )
+                .transition(LivelyBrand.contentTransition)
+                .zIndex(20)
+            }
         }
         .frame(width: Self.windowSize.width, height: Self.windowSize.height)
         // Structural material: content scrolls under chrome hierarchy without decorative glass stacks.
@@ -66,6 +89,7 @@ public struct SettingsContainerView: View {
         .onChange(of: preferences.appearance) { _, newValue in
             AppPreferences.applyAppAppearance(newValue)
         }
+        .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: preferences.hasCompletedWelcome)
     }
 
     // MARK: - Top chrome

@@ -6,7 +6,7 @@ All notable changes to Lively are documented here. The format follows [Keep a Ch
 
 ### Added
 
-- **Curated Wallpaper Library** — browse, download, and apply offline looping wallpapers from a gallery window
+- **User Wallpaper Library** — add your own MP4/MOV/M4V files once; apply to a target display or all displays
 - **Settings redesign** — System Settings-style sidebar (General, Playback, Screen Setup, Logs, About) with fixed popover size
 - **Screen Setup map** — live multi-display layout with wallpaper thumbnail previews
 - **Playback preferences** — quality, loop behavior, hardware decoding, max resolution
@@ -14,24 +14,31 @@ All notable changes to Lively are documented here. The format follows [Keep a Ch
 - **Appearance** — Light, Dark, or System theme for the menu-bar UI
 - **Update banner** — optional GitHub Releases check; shows “Update available” with View (no auto-install)
 - **ViewState** — builds UI with Command Line Tools (no SwiftUIMacros / full Xcode required for packaging)
+- **First-run onboarding** — welcome sheet, dismissible Displays tip, sticky “Playing on this display”, Spaces coach
+- **Screen Recording deep link** — empty/detecting states open System Settings privacy pane
+- **Broken bookmark recovery** — “File missing — Reselect” when a video was moved or deleted
+- **DMG installer** — `scripts/make-dmg.sh` builds a drag-to-Applications disk image
+- **Branded app icon** — menu bar, About, README, and `.icns` packaging
 
 ### Changed
 
 - Top nav uses underline selection; sidebar uses filled-pill selection (distinct languages)
 - Semantic system colors for neutrals; accent reserved for active/interactive controls
+- Display cards labeled **Display N** + hardware name (no redundant page “Displays” heading)
+- Reset Data is its own General card; Pause/Quit share capsule chrome
 - Logs table with Level / Message / Time, copy + download, internal scroll only
 - Path redaction in logs; GitHub update URLs allowlisted to `https://github.com`
 
 ### Fixed
 
-- Focus rings disabled on nav chrome
+- System blue focus rect on primary tabs suppressed; soft brand focus rings elsewhere
 - Security-scoped bookmark stop loops no longer mutate while iterating keys
 - Playback prefs soft-apply where possible (full reload only for loop mode)
 
 ### Tests
 
 - Battery policy unit tests
-- Curated wallpaper + download manager tests
+- Library / wallpaper manager tests
 
 ## [1.1.1] - 2026-07-11
 

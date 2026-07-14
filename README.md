@@ -32,14 +32,29 @@ Lively is a native macOS menu-bar utility that plays looping, hardware-accelerat
 
 **Latest release: [v1.2.0](https://github.com/harshabala/Lively/releases/latest)** · [All releases](https://github.com/harshabala/Lively/releases)
 
-### Option 1 — Download zip (recommended)
+### Option 1 — DMG (recommended)
+
+1. Download **`Lively-*-macOS.dmg`** from [GitHub Releases](https://github.com/harshabala/Lively/releases/latest)
+2. Open the disk image
+3. **Drag `Lively.app` onto the Applications folder** in the window
+4. Eject the DMG, then open Lively from Applications
+5. Look for the **Lively icon in the menu bar** (top-right) — there is **no Dock icon**
+
+Build a DMG locally after packaging:
+
+```bash
+./package.sh
+./scripts/make-dmg.sh
+# → /private/tmp/LivelyOutput/Lively-<version>-macOS.dmg
+```
+
+### Option 2 — Zip
 
 1. Download **`Lively-1.2.0-macOS.zip`** from [GitHub Releases](https://github.com/harshabala/Lively/releases/latest)
 2. Unzip and drag **`Lively.app`** to **Applications**
-3. Clear macOS download quarantine (required once — see below)
-4. Open Lively — look for the **play.tv** icon in the menu bar
+3. Clear quarantine if needed (below), then open Lively from the menu bar
 
-### Option 2 — Homebrew
+### Option 3 — Homebrew
 
 ```bash
 brew tap harshabala/lively https://github.com/harshabala/Lively
@@ -50,7 +65,7 @@ Homebrew installs to `/Applications/Lively.app` and clears quarantine automatica
 
 ### First launch: Gatekeeper (no Apple Developer ID)
 
-Lively is **ad-hoc signed**, not notarized. macOS marks downloads from the internet with a **quarantine flag** and may refuse to open apps from unidentified developers.
+Lively is **ad-hoc signed**, not notarized (no paid Apple Developer Program required). macOS may refuse to open apps from unidentified developers.
 
 **Run this once in Terminal after installing:**
 
@@ -70,11 +85,11 @@ Then open the app:
 open /Applications/Lively.app
 ```
 
-If macOS still warns you, **right-click → Open** on `Lively.app` once and confirm.
+If macOS still warns you, **right-click → Open** on `Lively.app` once and confirm. In-app **Settings → About** repeats these first-launch tips.
 
-### Option 3 — Build from source (developers)
+### Option 4 — Build from source (developers)
 
-Requires **Xcode 15+**. See [Building](#building) below.
+Requires **Xcode 15+** (or Command Line Tools for packaging via `package.sh`). See [Building](#building) below.
 
 ---
 
@@ -85,7 +100,7 @@ Most video-wallpaper apps on macOS are Electron shells or web renderers duct-tap
 | | |
 |---|---|
 | **Platform** | macOS 14.0 (Sonoma) or later |
-| **Distribution** | [GitHub Releases](https://github.com/harshabala/Lively/releases) zip or Homebrew cask |
+| **Distribution** | [GitHub Releases](https://github.com/harshabala/Lively/releases) DMG / zip or Homebrew cask |
 | **Privacy** | Fully offline — no analytics, telemetry, or network entitlement |
 | **Codecs** | H.264 and HEVC only (hardware-decoded) |
 | **License** | [MIT](LICENSE) — free to use, modify, and distribute |
@@ -160,17 +175,18 @@ swift run LivelyApp
 open /private/tmp/LivelyOutput/Lively.app
 ```
 
-After launch, look for the **play.tv** icon in the menu bar. Lively does not appear in the Dock.
+After launch, look for the **Lively app icon** in the menu bar. Lively does not appear in the Dock. First open shows a short welcome sheet; dismiss it or choose a video immediately.
 
 ### 2. Assign a wallpaper
 
-1. Click the menu-bar icon to open **Settings**.
-2. On the **Displays** tab, find your monitor card.
+1. Click the menu-bar icon to open Lively.
+2. On the **Displays** tab, find **Display 1**, **Display 2**, … with each monitor’s name.
 3. Choose a mode:
    - **Wallpaper** — one video for the current Space.
    - **Light & Dark** — separate videos for macOS light and dark appearance.
 4. **Drop** an `.mp4`, `.mov`, or `.m4v` onto the drop zone, or **click** to browse.
 5. Lively validates the codec (H.264 / HEVC only) before accepting the file.
+6. Use **Wallpaper Library** to save videos once and apply them to one or **all** displays.
 
 ### 3. Adjust playback
 
@@ -186,10 +202,11 @@ Use the **pause/play** button in the settings header to pause all wallpapers glo
 
 On the **Settings** tab:
 
-- **Launch at Login** — registers via `SMAppService` (macOS 13+).
-- **Reset All Data** — clears all assignments and preferences.
-- **Logs** — view and copy in-app logs for troubleshooting.
-- **About** — version, supported formats, release link.
+- **General** — launch at login, battery pause, appearance, updates, **Reset Data**
+- **Playback** — quality, loop, hardware decode, max resolution
+- **Screen Setup** — multi-display map
+- **Logs** — view and copy troubleshooting logs
+- **About** — version, GitHub links, first-launch / Gatekeeper help
 
 ### 5. Switch Spaces
 
@@ -205,11 +222,13 @@ Swipe between Spaces (or use Control+Arrow). Lively detects the active Space per
 - **Light / Dark appearance mode** — different videos for each macOS appearance on the same Space
 - **Security-scoped bookmarks** — assignments survive reboots without re-selecting files
 - **Launch at Login** — modern `SMAppService` registration, no LaunchAgents plist
-- **Menu-bar-first UX** — compact 480×560 settings panel; wallpaper stays the hero
-- **Fully offline** — no network entitlement, no analytics, no telemetry
-- **Accessible UI** — Reduce Motion support, VoiceOver labels, 32pt hit targets, error announcements
+- **User wallpaper library** — add your own videos once; apply to a display or all displays
+- **Menu-bar-first UX** — compact settings popover; wallpaper stays the hero
+- **Fully offline** — no analytics; optional GitHub Releases check only when you enable it
+- **Accessible UI** — Reduce Motion support, VoiceOver labels, 32pt hit targets, brand focus rings
 - **In-app logging** — `os.Logger` wrapper with copy-to-clipboard viewer
 - **Native motion design** — pill tabs, staggered card entrance, symbol cross-fades (all gated on Reduce Motion)
+- **First-run coaching** — welcome sheet, Displays tip, sticky “Playing” status, Spaces tip
 
 ---
 
@@ -225,7 +244,7 @@ Swipe between Spaces (or use Control+Arrow). Lively detects the active Space per
 | **No GIF / image wallpapers** | Video only. Static images are handled by macOS itself. |
 | **Audio** | Wallpaper audio plays from the desktop layer; macOS may mix it with other app audio. No per-app ducking. |
 | **Multi-user / iCloud sync** | Config is local to the machine. No sync across Macs. |
-| **Update checker** | No in-app auto-update. Check [GitHub Releases](https://github.com/harshabala/Lively/releases) manually. |
+| **Update checker** | Optional banner opens GitHub Releases — no auto-download/install (no paid Developer ID / notarization). |
 | **Intel performance** | 4K HEVC depends on hardware decode (T1/T2 Macs and Apple Silicon). Older Intel GPUs may struggle with very high bitrates. |
 | **File size** | No hard cap — AVFoundation streams from disk — but extreme bitrates can stutter if SSD throughput is the bottleneck. |
 
