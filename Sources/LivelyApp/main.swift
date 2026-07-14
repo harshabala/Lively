@@ -45,17 +45,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = statusItem.button {
-            // Prefer branded app icon; fall back to SF Symbol for incomplete bundles.
-            if let appIcon = NSApp.applicationIconImage?.copy() as? NSImage {
-                appIcon.size = NSSize(width: 18, height: 18)
-                appIcon.isTemplate = false
-                button.image = appIcon
-            } else {
-                button.image = NSImage(
-                    systemSymbolName: "play.tv.fill",
-                    accessibilityDescription: "Lively"
-                )
-            }
+            // Template SF Symbol reads clearly in the menu bar (light/dark).
+            // Full app icon remains for Finder / About / .app bundle.
+            button.image = NSImage(
+                systemSymbolName: "play.tv.fill",
+                accessibilityDescription: "Lively"
+            )
             button.toolTip = "Lively — video wallpapers"
             button.action = #selector(togglePopover(_:))
             button.target = self
