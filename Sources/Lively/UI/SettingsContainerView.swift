@@ -77,7 +77,7 @@ public struct SettingsContainerView: View {
             Spacer(minLength: LivelyBrand.Spacing.sm)
 
             HStack(spacing: LivelyBrand.Spacing.sm) {
-                // Default action: filled control capsule
+                // Matched chrome capsules: Pause (primary) / Quit (destructive text)
                 chromeActionButton(
                     title: wallpaperController.isPaused ? "Resume" : "Pause",
                     systemImage: wallpaperController.isPaused ? "play.fill" : "pause.fill",
@@ -88,18 +88,13 @@ public struct SettingsContainerView: View {
                 .help(wallpaperController.isPaused ? "Resume wallpapers" : "Pause wallpapers")
                 .accessibilityLabel(wallpaperController.isPaused ? "Resume Lively" : "Pause Lively")
 
-                // Destructive: text-only, quieter than Pause
-                Button {
+                chromeActionButton(
+                    title: "Quit",
+                    systemImage: nil,
+                    tint: LivelyBrand.destructive
+                ) {
                     NSApp.terminate(nil)
-                } label: {
-                    Text("Quit")
-                        .font(LivelyBrand.Typography.caption.weight(.medium))
-                        .foregroundStyle(LivelyBrand.destructive)
-                        .padding(.horizontal, LivelyBrand.Spacing.md)
-                        .frame(minHeight: LivelyBrand.Spacing.controlMin)
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(PressScaleButtonStyle())
                 .help("Quit Lively")
                 .accessibilityLabel("Quit Lively")
             }
@@ -142,21 +137,25 @@ public struct SettingsContainerView: View {
             }
             .contentShape(Rectangle())
         }
+        // Suppress system focus ring on segmented chrome (blue rect regression).
         .buttonStyle(PressScaleButtonStyle())
+        .focusEffectDisabled()
         .accessibilityLabel(title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func chromeActionButton(
         title: String,
-        systemImage: String,
+        systemImage: String?,
         tint: Color,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             HStack(spacing: LivelyBrand.Spacing.xxs) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 12, weight: .semibold))
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 12, weight: .semibold))
+                }
                 Text(title)
                     .font(LivelyBrand.Typography.caption.weight(.semibold))
                     .lineLimit(1)
@@ -175,6 +174,7 @@ public struct SettingsContainerView: View {
             .contentShape(Capsule())
         }
         .buttonStyle(PressScaleButtonStyle())
+        .focusEffectDisabled()
     }
 
     // MARK: - Status banners

@@ -256,33 +256,52 @@ public struct PreferencesView: View {
                         .padding(.horizontal, LivelyBrand.Spacing.lg)
                 }
 
-                HStack {
-                    Spacer()
-                    Button(role: .destructive) {
-                        showResetConfirm = true
-                    } label: {
-                        Text("Reset All Data…")
-                            .font(LivelyBrand.Typography.caption)
-                            .foregroundStyle(LivelyBrand.destructive)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                    }
-                    .buttonStyle(.plain)
-                    .focusEffectDisabled()
-                    .overlay(
-                        RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
-                            .strokeBorder(LivelyBrand.destructive.opacity(0.35), lineWidth: 1)
-                    )
-                    .alert("Reset All Data?", isPresented: $showResetConfirm) {
-                        Button("Cancel", role: .cancel) {}
-                        Button("Reset", role: .destructive) {
-                            configStore.clearAllData()
+                // Destructive action as its own card (same density as other General groups).
+                // "Reset Data" = clear wallpapers + preferences, not uninstall the app.
+                settingsCard {
+                    HStack(alignment: .center, spacing: LivelyBrand.Spacing.md) {
+                        VStack(alignment: .leading, spacing: LivelyBrand.Spacing.tiny) {
+                            Text("Reset Data")
+                                .font(LivelyBrand.Typography.body.weight(.semibold))
+                                .foregroundStyle(LivelyBrand.foreground)
+                            Text("Remove all wallpapers and preferences. This cannot be undone.")
+                                .font(LivelyBrand.Typography.footnote)
+                                .foregroundStyle(LivelyBrand.mutedForeground)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                    } message: {
-                        Text("This will remove all wallpapers and settings. This cannot be undone.")
+                        Spacer(minLength: LivelyBrand.Spacing.sm)
+                        Button(role: .destructive) {
+                            showResetConfirm = true
+                        } label: {
+                            Text("Reset…")
+                                .font(LivelyBrand.Typography.caption.weight(.semibold))
+                                .foregroundStyle(LivelyBrand.destructive)
+                                .padding(.horizontal, LivelyBrand.Spacing.md)
+                                .frame(minHeight: LivelyBrand.Spacing.controlMin)
+                                .background(
+                                    RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
+                                        .fill(LivelyBrand.destructive.opacity(0.1))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm)
+                                        .strokeBorder(LivelyBrand.destructive.opacity(0.35), lineWidth: 1)
+                                )
+                                .contentShape(RoundedRectangle(cornerRadius: LivelyBrand.Radius.sm))
+                        }
+                        .buttonStyle(PressScaleButtonStyle())
+                        .accessibilityLabel("Reset data")
+                        .accessibilityHint("Removes all wallpapers and preferences")
                     }
+                    .padding(.vertical, LivelyBrand.Spacing.xs)
                 }
-                .padding(.horizontal, LivelyBrand.Spacing.lg)
+                .alert("Reset Data?", isPresented: $showResetConfirm) {
+                    Button("Cancel", role: .cancel) {}
+                    Button("Reset Data", role: .destructive) {
+                        configStore.clearAllData()
+                    }
+                } message: {
+                    Text("This removes every wallpaper assignment and restores preferences to defaults. This cannot be undone.")
+                }
                 .padding(.bottom, LivelyBrand.Spacing.lg)
             }
         }
