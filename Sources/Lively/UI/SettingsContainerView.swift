@@ -60,7 +60,14 @@ public struct SettingsContainerView: View {
             .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: selectedTab)
         }
         .frame(width: Self.windowSize.width, height: Self.windowSize.height)
-        .background(LivelyBrand.background)
+        // Structural material: content scrolls under chrome hierarchy without decorative glass stacks.
+        .background {
+            ZStack {
+                LivelyBrand.background
+                GlassEffect(material: .headerView, blendingMode: .withinWindow)
+                    .opacity(0.55)
+            }
+        }
         .preferredColorScheme(preferences.appearance.colorScheme)
         .onChange(of: preferences.appearance) { _, newValue in
             AppPreferences.applyAppAppearance(newValue)

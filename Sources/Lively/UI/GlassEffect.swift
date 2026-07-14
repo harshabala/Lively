@@ -80,11 +80,12 @@ struct GlassButtonStyle: ButtonStyle {
                         LivelyBrand.foreground.opacity(configuration.isPressed ? 0.1 : 0.0)
                     }
                 }
-                .cornerRadius(8)
+                .cornerRadius(LivelyBrand.Radius.navItem)
             )
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .opacity(configuration.isPressed ? 0.92 : 1.0)
             .animation(
-                reduceMotion ? nil : .spring(duration: 0.2, bounce: 0.0),
+                reduceMotion ? nil : .spring(duration: 0.15, bounce: 0),
                 value: configuration.isPressed
             )
     }

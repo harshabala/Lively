@@ -23,7 +23,8 @@ struct PillTabBar<Selection: Hashable>: View {
     private func tabButton(_ label: String, value: Selection, index: Int, total: Int) -> some View {
         let isSelected = selection == value
         return Button {
-            withAnimation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.35)) { selection = value }
+            // Critically damped (bounce 0): high-frequency tab chrome must not overshoot.
+            withAnimation(reduceMotion ? nil : LivelyBrand.Motion.normal) { selection = value }
         } label: {
             Text(label)
                 .font(LivelyBrand.Typography.caption.weight(isSelected ? .semibold : .regular))

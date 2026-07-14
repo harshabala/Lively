@@ -138,7 +138,7 @@ public struct PreferencesView: View {
             )
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressScaleButtonStyle())
         .focusEffectDisabled()
         .accessibilityLabel(item.title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])

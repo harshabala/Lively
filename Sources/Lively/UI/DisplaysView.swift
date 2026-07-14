@@ -139,7 +139,7 @@ public struct DisplaysView: View {
             .padding(LivelyBrand.Spacing.md)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressScaleButtonStyle())
         .background(
             RoundedRectangle(cornerRadius: LivelyBrand.Radius.md)
                 .fill(LivelyBrand.card.opacity(0.88))
@@ -148,8 +148,6 @@ public struct DisplaysView: View {
             RoundedRectangle(cornerRadius: LivelyBrand.Radius.md)
                 .strokeBorder(LivelyBrand.border.opacity(0.35), lineWidth: 1)
         )
-        .scaleEffect(isLibraryButtonHovered && !reduceMotion ? 1.01 : 1.0)
-        .animation(reduceMotion ? nil : LivelyBrand.Motion.fast, value: isLibraryButtonHovered)
         .onHover { hovering in
             isLibraryButtonHovered = hovering
         }
@@ -208,7 +206,7 @@ public struct DisplaysView: View {
                 for i in 0...steps {
                     do {
                         try await Task.sleep(for: .milliseconds(40))
-                        withAnimation(.spring(duration: 0.2, bounce: 0.2)) {
+                        withAnimation(reduceMotion ? nil : LivelyBrand.Motion.fast) {
                             displayedDays = (i == steps) ? target : min(i * stepSize, target)
                         }
                     } catch {
