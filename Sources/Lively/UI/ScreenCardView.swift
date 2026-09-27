@@ -4,7 +4,6 @@ import AVFoundation
 import UniformTypeIdentifiers
 
 private let supportedVideoTypes: [UTType] = [.mpeg4Movie, .quickTimeMovie, .movie]
-private let supportedCodecs: [FourCharCode] = [kCMVideoCodecType_H264, kCMVideoCodecType_HEVC]
 
 // MARK: - Screen Card View
 
@@ -661,12 +660,12 @@ struct ScreenCardView: View {
             isValidating.wrappedValue = true
             defer { isValidating.wrappedValue = false }
 
-            switch await VideoURLValidation.validate(url) {
+            switch await VideoValidator.validate(url) {
             case .invalid(let message):
                 showError(message)
-            case .valid(let validURL):
+            case .valid:
                 errorMessage = nil
-                onAccept(validURL)
+                onAccept(url)
             }
         }
     }
@@ -706,52 +705,6 @@ struct ScreenCardView: View {
                 self.handleURLSelection(url, isValidating: isValidating, onAccept: onPick)
             }
         }
-    }
-}
-
-// MARK: - Video URL Validation
-
-private enum VideoURLValidation {
-    enum Outcome {
-        case valid(URL)
-        case invalid(String)
-    }
-
-    static func validate(_ url: URL) async -> Outcome {
-        guard isValidLivelyVideoFile(url) else {
-            return .invalid("Unsupported format. Use .mp4, .mov, or .m4v")
-        }
-
-        let scopeGranted = url.startAccessingSecurityScopedResource()
-        defer { if scopeGranted { url.stopAccessingSecurityScopedResource() } }
-
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            return .invalid("File not found or not accessible.")
-        }
-
-        let asset = AVURLAsset(url: url)
-        guard let tracks = try? await asset.loadTracks(withMediaType: .video), !tracks.isEmpty else {
-            return .invalid("No video track found in this file.")
-        }
-
-        var foundSupported = false
-        for track in tracks {
-            guard let descs = try? await track.load(.formatDescriptions) else { continue }
-            for desc in descs {
-                let codec = CMFormatDescriptionGetMediaSubType(desc)
-                if supportedCodecs.contains(codec) {
-                    foundSupported = true
-                } else {
-                    return .invalid("Only H.264 and HEVC are supported. Re-encode this file.")
-                }
-            }
-        }
-
-        guard foundSupported else {
-            return .invalid("Only H.264 and HEVC are supported. Re-encode this file.")
-        }
-
-        return .valid(url)
     }
 }
 
