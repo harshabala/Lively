@@ -132,24 +132,32 @@ struct ConfigStoreTests {
         #expect(resolved == nil)
     }
 
-    @Test func pruneOrphanedConfigs() async {
+    /// Regression: assignments for Spaces that are not currently visible, or for
+    /// displays that are unplugged, used to be deleted whenever the screen
+    /// layout was re-read (every Space switch, config change, and launch).
+    @Test func inactiveSpaceAssignmentsSurviveControllerSync() async {
         let tempFile = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
         defer { try? FileManager.default.removeItem(at: tempFile) }
         let configStore = ConfigStore(configFileURL: tempFile)
 
-        let tempVideo = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "_prune.mp4")
+        let tempVideo = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "_inactive.mp4")
         FileManager.default.createFile(atPath: tempVideo.path, contents: Data(), attributes: nil)
         defer { try? FileManager.default.removeItem(at: tempVideo) }
 
         var wallpaper = DynamicWallpaper()
         wallpaper.staticURL = tempVideo
-        configStore.assign(dynamicWallpaper: wallpaper, toSpaceKey: "active:space")
-        configStore.assign(dynamicWallpaper: wallpaper, toSpaceKey: "orphan:space")
+        let otherSpace = "999999:file:///Library/Desktop%20Pictures/Other%20Space.heic"
+        let unpluggedDisplay = "424242:file:///Library/Desktop%20Pictures/External.heic"
+        configStore.assign(dynamicWallpaper: wallpaper, toSpaceKey: otherSpace)
+        configStore.assign(dynamicWallpaper: wallpaper, toSpaceKey: unpluggedDisplay)
 
-        configStore.pruneOrphanedConfigs(activeSpaceKeys: ["active:space"])
+        let monitor = SpaceMonitor()
+        let controller = WallpaperController(spaceMonitor: monitor, configStore: configStore)
+        monitor.refresh()
+        _ = controller
 
-        #expect(configStore.configs["active:space"] != nil)
-        #expect(configStore.configs["orphan:space"] == nil)
+        #expect(configStore.configs[otherSpace] != nil)
+        #expect(configStore.configs[unpluggedDisplay] != nil)
     }
 
     @Test func clearAllDataCancelsPendingPersist() async throws {

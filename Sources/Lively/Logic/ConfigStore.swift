@@ -248,17 +248,6 @@ public class ConfigStore: ObservableObject {
         persist()
     }
 
-    /// Removes configs whose spaceKeys don't match any currently active screen space.
-    public func pruneOrphanedConfigs(activeSpaceKeys: Set<String>) {
-        let orphaned = configs.keys.filter { !activeSpaceKeys.contains($0) }
-        guard !orphaned.isEmpty else { return }
-        for key in orphaned {
-            configs.removeValue(forKey: key)
-        }
-        persist()
-        LivelyLogger.config.info("Pruned \(orphaned.count) orphaned config(s)")
-    }
-
     public func remove(spaceKey: String) {
         configs.removeValue(forKey: spaceKey)
         persist()

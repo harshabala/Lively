@@ -519,12 +519,12 @@ public final class WallpaperController: ObservableObject {
     // MARK: - Reactive Bindings
 
     private func bind() {
+        // NOTE: never prune configs here. `screenSpaces` only describes the
+        // *currently visible* Space on each *currently connected* display, so
+        // assignments for other Spaces and unplugged monitors must survive.
         spaceMonitor.$screenSpaces
             .sink { [weak self] spaces in
-                guard let self else { return }
-                let activeKeys = Set(spaces.map(\.spaceKey))
-                configStore.pruneOrphanedConfigs(activeSpaceKeys: activeKeys)
-                synchronize(to: spaces)
+                self?.synchronize(to: spaces)
             }
             .store(in: &cancellables)
 
