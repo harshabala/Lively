@@ -636,6 +636,7 @@ public final class WallpaperController: ObservableObject {
         }
         observe(workspace, NSWorkspace.screensDidWakeNotification) { [weak self] in
             self?.setSystemSuspension(.displaysAsleep, active: false)
+            self?.reconcileLockState()
         }
         observe(workspace, NSWorkspace.willSleepNotification) { [weak self] in
             self?.setSystemSuspension(.systemAsleep, active: true)
@@ -648,6 +649,7 @@ public final class WallpaperController: ObservableObject {
         }
         observe(workspace, NSWorkspace.sessionDidBecomeActiveNotification) { [weak self] in
             self?.setSystemSuspension(.sessionInactive, active: false)
+            self?.reconcileLockState()
         }
         // A re-inserted drive may bring back a file that failed to load.
         observe(workspace, NSWorkspace.didMountNotification) { [weak self] in
@@ -660,7 +662,9 @@ public final class WallpaperController: ObservableObject {
             self?.setSystemSuspension(.screenLocked, active: true)
         }
         observe(distributed, Notification.Name("com.apple.screenIsUnlocked")) { [weak self] in
-            self?.setSystemSuspension(.screenLocked, active: false)
+            // A screen saver can't still be running once the user unlocked;
+            // clearing it guards against a missed "didstop".
+            self?.setSystemSuspension([.screenLocked: false, .screenSaver: false])
         }
         observe(distributed, Notification.Name("com.apple.screensaver.didstart")) { [weak self] in
             self?.setSystemSuspension(.screenSaver, active: true)
@@ -671,15 +675,44 @@ public final class WallpaperController: ObservableObject {
     }
 
     func setSystemSuspension(_ reason: SystemSuspensionReason, active: Bool) {
-        guard systemSuspension.set(reason, active: active) else { return }
-        applySystemSuspension(trigger: "\(reason.rawValue)=\(active)")
+        setSystemSuspension([reason: active])
+    }
+
+    /// Applies several reason changes with a single playback update.
+    func setSystemSuspension(_ changes: [SystemSuspensionReason: Bool]) {
+        var flipped = false
+        for (reason, active) in changes {
+            flipped = systemSuspension.set(reason, active: active) || flipped
+        }
+        guard flipped else { return }
+        let trigger = changes.map { "\($0.key.rawValue)=\($0.value)" }.sorted().joined(separator: ",")
+        applySystemSuspension(trigger: trigger)
+    }
+
+    /// Distributed lock/unlock notifications can be missed around sleep and
+    /// user switching; ask the window server so a lost "unlocked" can't leave
+    /// wallpapers paused forever.
+    private func reconcileLockState() {
+        if Self.isScreenLockedNow() {
+            setSystemSuspension(.screenLocked, active: true)
+        } else {
+            setSystemSuspension([.screenLocked: false, .screenSaver: false])
+        }
+    }
+
+    nonisolated static func isScreenLockedNow() -> Bool {
+        guard let info = CGSessionCopyCurrentDictionary() as? [String: Any] else { return false }
+        return (info["CGSSessionScreenIsLocked"] as? Bool) ?? false
     }
 
     func systemDidWake() {
         // AVPlayer can come back stalled after sleep; clear failures so files
         // on drives that re-mounted during wake get another try.
         sessionManager.retryFailedPlayback()
-        if systemSuspension.systemDidWake() {
+        if !Self.isScreenLockedNow() {
+            systemSuspension.set(.screenLocked, active: false)
+        }
+        if systemSuspension.systemDidWake() || isSystemSuspended != systemSuspension.isSuspended {
             applySystemSuspension(trigger: "didWake")
         } else if !shouldHaltPlayback {
             synchronize(to: spaceMonitor.screenSpaces)

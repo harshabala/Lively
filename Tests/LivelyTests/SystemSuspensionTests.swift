@@ -83,15 +83,15 @@ struct WallpaperControllerSystemStateTests {
         #expect(!controller.isSystemSuspended)
     }
 
-    @Test func lockSurvivesDisplayWake() {
+    @Test func screenSaverSurvivesSystemWake() {
         let (controller, file) = makeController()
         defer { try? FileManager.default.removeItem(at: file); controller.tearDown() }
 
-        controller.setSystemSuspension(.screenLocked, active: true)
-        controller.setSystemSuspension(.displaysAsleep, active: true)
+        controller.setSystemSuspension(.screenSaver, active: true)
+        controller.setSystemSuspension(.systemAsleep, active: true)
         controller.systemDidWake()
         #expect(controller.isSystemSuspended)
-        controller.setSystemSuspension(.screenLocked, active: false)
+        controller.setSystemSuspension(.screenSaver, active: false)
         #expect(!controller.isSystemSuspended)
         // User pause is independent of system suspension.
         #expect(!controller.isPaused)
@@ -104,6 +104,33 @@ struct WallpaperControllerSystemStateTests {
 
         NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.screensDidSleepNotification, object: NSWorkspace.shared)
         try await Task.sleep(for: .milliseconds(50))
+        #expect(!controller.isSystemSuspended)
+    }
+}
+
+@MainActor
+struct LockReconciliationTests {
+    @Test func unlockAlsoClearsScreenSaver() {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
+        let controller = WallpaperController(spaceMonitor: SpaceMonitor(), configStore: ConfigStore(configFileURL: file))
+        defer { try? FileManager.default.removeItem(at: file); controller.tearDown() }
+
+        controller.setSystemSuspension(.screenSaver, active: true)
+        controller.setSystemSuspension(.screenLocked, active: true)
+        // Missed "didstop": the unlock alone must resume playback.
+        controller.setSystemSuspension([.screenLocked: false, .screenSaver: false])
+        #expect(!controller.isSystemSuspended)
+    }
+
+    @Test func wakeClearsStaleLockWhenSessionIsUnlocked() {
+        // Test runs in an unlocked GUI session.
+        guard !WallpaperController.isScreenLockedNow() else { return }
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
+        let controller = WallpaperController(spaceMonitor: SpaceMonitor(), configStore: ConfigStore(configFileURL: file))
+        defer { try? FileManager.default.removeItem(at: file); controller.tearDown() }
+
+        controller.setSystemSuspension(.screenLocked, active: true)   // "unlocked" never arrives
+        controller.systemDidWake()
         #expect(!controller.isSystemSuspended)
     }
 }
