@@ -7,15 +7,26 @@ import IOKit.ps
 
 /// Encapsulates the WallpaperWindow + video player for one physical display.
 /// Follows LiveDesk's proven pattern: plain NSView + AVPlayerLayer, no subclass.
+///
+/// Playback runs only while the controller wants it (`wantsPlayback`) *and*
+/// the window is actually visible (not fully covered by full-screen or
+/// maximised windows), so a hidden wallpaper stops decoding.
 @MainActor
 private final class WallpaperSession {
     let window: WallpaperWindow
     private let contentView: NSView
     private let playerLayer: AVPlayerLayer
     private var player: AVPlayer?
-    private var loopObserver: Any?
-    private var errorObservation: AnyCancellable?
+    private var itemObservers: [NSObjectProtocol] = []
+    private var statusObservation: AnyCancellable?
+    private var occlusionObservation: AnyCancellable?
     private(set) var currentURL: URL?
+    /// URL that last failed to load; not retried until `retryFailedPlayback()`
+    /// so a broken or unreachable file doesn't flash a black window on every sync.
+    private var failedURL: URL?
+    private var isReady = false
+    private var wantsPlayback = false
+    private var isOccluded = false
 
     init(screen: NSScreen) {
         window = WallpaperWindow(screen: screen)
@@ -33,13 +44,23 @@ private final class WallpaperSession {
         contentView.layer!.addSublayer(playerLayer)
         
         window.contentView = contentView
+
+        occlusionObservation = NotificationCenter.default
+            .publisher(for: NSWindow.didChangeOcclusionStateNotification, object: window)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.occlusionDidChange() }
     }
 
     /// Shows the window and plays (or crossfades to) the given video.
     func play(url: URL, wallpaper: DynamicWallpaper, screen: NSScreen, onError: @escaping @Sendable (Error) -> Void) {
-        // Ensure the window matches the current screen frame
+        wantsPlayback = true
+
+        // Ensure the window matches the current screen frame (resolution /
+        // arrangement changes arrive as a re-sync with the new NSScreen).
         let localFrame = NSRect(origin: .zero, size: screen.frame.size)
-        window.setFrame(screen.frame, display: true)
+        if window.frame != screen.frame {
+            window.setFrame(screen.frame, display: true)
+        }
         contentView.frame = localFrame
         playerLayer.frame = localFrame
         
@@ -48,16 +69,20 @@ private final class WallpaperSession {
         playerLayer.videoGravity = gravity
         
         if url == currentURL {
-            playerLayer.videoGravity = gravity
             player?.isMuted = wallpaper.isMuted
             player?.volume = wallpaper.volume
-            player?.play()   // ensure playing (handles resume via synchronize)
-            window.show()
+            if isReady { window.show() }
+            updatePlaybackRate()
             return
         }
-        
+
+        if url == failedURL {
+            // Known-bad file: stay hidden (system wallpaper shows) until retried.
+            return
+        }
+
         currentURL = url
-        window.show()
+        failedURL = nil
         loadVideo(url: url, muted: wallpaper.isMuted, volume: wallpaper.volume, onError: onError)
     }
 
@@ -65,56 +90,85 @@ private final class WallpaperSession {
         tearDownPlayer()
 
         let prefs = AppPreferences.shared
-        let newPlayer = AVPlayer(url: url)
+        let item = AVPlayerItem(url: url)
+        let newPlayer = AVPlayer(playerItem: item)
         newPlayer.isMuted = muted
         newPlayer.volume = volume
         newPlayer.preventsDisplaySleepDuringVideoPlayback = false
         newPlayer.automaticallyWaitsToMinimizeStalling = false
+        newPlayer.actionAtItemEnd = .pause
 
         applyPreferences(to: newPlayer, prefs: prefs)
 
         // Loop or freeze at end based on preference (captured for the observer).
         let loopMode = prefs.loopBehavior
-        loopObserver = NotificationCenter.default.addObserver(
+        itemObservers.append(NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
-            object: newPlayer.currentItem,
+            object: item,
             queue: .main
-        ) { [weak newPlayer] _ in
-            switch loopMode {
-            case .loop:
-                newPlayer?.seek(to: .zero)
-                newPlayer?.play()
-            case .playOnceFreeze:
-                newPlayer?.pause()
+        ) { [weak self, weak newPlayer] _ in
+            MainActor.assumeIsolated {
+                switch loopMode {
+                case .loop:
+                    newPlayer?.seek(to: .zero)
+                    self?.updatePlaybackRate()
+                case .playOnceFreeze:
+                    newPlayer?.pause()
+                }
             }
-        }
+        })
 
-        // Observe errors to bubble up
+        // Mid-playback I/O failure (e.g. the drive holding the file was ejected).
+        itemObservers.append(NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemFailedToPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] note in
+            let error = note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
+                ?? CocoaError(.fileReadUnknown)
+            MainActor.assumeIsolated {
+                self?.handleFailure(error, onError: onError)
+            }
+        })
+
         // KVO callbacks can fire on arbitrary queues. By using Combine, we ensure
         // the closure executes on the main thread and avoids @MainActor isolation crashes.
-        errorObservation = newPlayer.currentItem?.publisher(for: \.status)
+        statusObservation = item.publisher(for: \.status)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self, weak newPlayer] status in
-                guard status == .failed, let error = newPlayer?.currentItem?.error else { return }
-                LivelyLogger.wallpaper.error("AVPlayerItem failed: \(error.localizedDescription)")
-                // Clear currentURL so the next synchronize() call can retry
-                self?.currentURL = nil
-                onError(error)
+            .sink { [weak self, weak item] status in
+                guard let self else { return }
+                switch status {
+                case .readyToPlay:
+                    self.isReady = true
+                    // Only reveal the window once there is a frame to show, so a
+                    // bad file never covers the desktop with a black window.
+                    if self.wantsPlayback { self.window.show() }
+                    self.updatePlaybackRate()
+                case .failed:
+                    self.handleFailure(item?.error ?? CocoaError(.fileReadCorruptFile), onError: onError)
+                default:
+                    break
+                }
             }
 
-        // Connect player to layer and start
+        // Connect player to layer; playback starts when the item is ready.
         playerLayer.player = newPlayer
         self.player = newPlayer
-        newPlayer.play()
+        updatePlaybackRate()
+    }
+
+    private func handleFailure(_ error: Error, onError: @escaping @Sendable (Error) -> Void) {
+        guard let url = currentURL else { return }
+        LivelyLogger.wallpaper.error("Playback failed for \(url.lastPathComponent): \(error.localizedDescription)")
+        failedURL = url
+        currentURL = nil
+        tearDownPlayer()
+        window.orderOut(nil)
+        onError(error)
     }
 
     private func applyPreferences(to player: AVPlayer, prefs: AppPreferences) {
-        let peak = prefs.playbackQuality.preferredPeakBitRate
-        if peak > 0 {
-            player.currentItem?.preferredPeakBitRate = peak
-        } else {
-            player.currentItem?.preferredPeakBitRate = 0
-        }
+        player.currentItem?.preferredPeakBitRate = max(0, prefs.playbackQuality.preferredPeakBitRate)
 
         // When hardware decoding is off, cap resolution as a software-friendly budget.
         if !prefs.hardwareDecoding {
@@ -139,29 +193,66 @@ private final class WallpaperSession {
         currentURL = nil
     }
 
+    /// Allows a previously failed file to be tried again (drive re-mounted, wake).
+    func retryFailedPlayback() {
+        failedURL = nil
+    }
+
     /// Hides the window and stops playback.
     func hide() {
+        wantsPlayback = false
         currentURL = nil
         tearDownPlayer()
         window.orderOut(nil)
     }
 
+    /// Final teardown when the display goes away or the app quits.
+    func destroy() {
+        hide()
+        occlusionObservation?.cancel()
+        occlusionObservation = nil
+        window.close()
+    }
+
     func pause() {
-        player?.pause()
+        wantsPlayback = false
+        updatePlaybackRate()
     }
 
     func resume() {
-        player?.play()
+        wantsPlayback = true
+        updatePlaybackRate()
+    }
+
+    private func occlusionDidChange() {
+        // Only trust occlusion while ordered in; orderOut also reports "hidden".
+        guard window.isVisible else { return }
+        let occluded = !window.occlusionState.contains(.visible)
+        guard occluded != isOccluded else { return }
+        isOccluded = occluded
+        updatePlaybackRate()
+    }
+
+    /// Single place that decides whether the decoder runs.
+    private func updatePlaybackRate() {
+        guard let player else { return }
+        if WallpaperPlaybackPolicy.shouldDecode(wantsPlayback: wantsPlayback, isOccluded: isOccluded) {
+            player.play()
+        } else {
+            player.pause()
+        }
     }
     
     private func tearDownPlayer() {
-        if let observer = loopObserver {
+        for observer in itemObservers {
             NotificationCenter.default.removeObserver(observer)
-            loopObserver = nil
         }
-        errorObservation?.cancel()
-        errorObservation = nil
+        itemObservers.removeAll()
+        statusObservation?.cancel()
+        statusObservation = nil
+        isReady = false
         player?.pause()
+        player?.replaceCurrentItem(with: nil)
         playerLayer.player = nil
         player = nil
     }
@@ -239,10 +330,14 @@ private final class WallpaperSessionManager {
 
     func tearDownAll(bookmarkManager: BookmarkManager) {
         for (_, session) in sessions {
-            session.hide()
+            session.destroy()
         }
         sessions.removeAll()
         bookmarkManager.stopAllScopes()
+    }
+
+    func retryFailedPlayback() {
+        sessions.values.forEach { $0.retryFailedPlayback() }
     }
 
     func synchronize(
@@ -257,10 +352,10 @@ private final class WallpaperSessionManager {
 
         // Always clean up sessions for displays that are no longer connected,
         // even when paused — a disconnected monitor should never keep a hidden window alive.
-        for id in sessions.keys where !liveDisplayIDs.contains(id) {
-            sessions[id]?.hide()
-            sessions.removeValue(forKey: id)
+        for id in Array(sessions.keys) where !liveDisplayIDs.contains(id) {
+            sessions.removeValue(forKey: id)?.destroy()
             bookmarkManager.stopScopes(withDisplayID: id)
+            LivelyLogger.wallpaper.info("Display \(id) disconnected; wallpaper window released")
         }
 
         // While paused, skip playback updates; togglePause() will re-sync on resume.
@@ -310,6 +405,10 @@ public final class WallpaperController: ObservableObject {
     @Published public private(set) var isOnBattery = false
     /// True when pause was forced by the hard 25% floor (vs user threshold).
     @Published public private(set) var isForcedBatteryPause = false
+    /// True while the system makes wallpapers invisible anyway (display or
+    /// system sleep, screen lock, screen saver, fast user switch). Playback
+    /// stops so the decoder doesn't run for nobody.
+    @Published public private(set) var isSystemSuspended = false
     
     /// Bubbles up playback errors (spaceKey, Error message) to the UI
     public let playbackErrors = PassthroughSubject<(String, String), Never>()
@@ -326,6 +425,7 @@ public final class WallpaperController: ObservableObject {
     private var appearanceObserver: AnyCancellable?
     private var thermalStateObserver: AnyCancellable?
     private var powerSourceTimer: Timer?
+    private var systemSuspension = SystemSuspension()
 
     // MARK: - Init
 
@@ -358,6 +458,7 @@ public final class WallpaperController: ObservableObject {
         setupAppearanceObserver()
         setupThermalStateObserver()
         setupBatteryMonitor()
+        setupSystemStateObservers()
         observePreferences()
     }
 
@@ -382,7 +483,7 @@ public final class WallpaperController: ObservableObject {
     }
 
     private var shouldHaltPlayback: Bool {
-        isPaused || isThrottled || isBatteryPaused
+        isPaused || isThrottled || isBatteryPaused || isSystemSuspended
     }
 
     private func applyPlaybackState() {
@@ -440,6 +541,8 @@ public final class WallpaperController: ObservableObject {
                 self?.refreshBatteryState()
             }
         }
+        // Let the OS coalesce wake-ups; exact timing doesn't matter here.
+        powerSourceTimer?.tolerance = 5
         // Also refresh when Low Power Mode changes (related power policy signal).
         NotificationCenter.default.publisher(for: Notification.Name("NSProcessInfoPowerStateDidChange"))
             .receive(on: DispatchQueue.main)
@@ -514,6 +617,86 @@ public final class WallpaperController: ObservableObject {
             return (true, false)
         }
         return (false, false)
+    }
+
+    // MARK: - System state (sleep, lock, screen saver, user switch)
+
+    private func setupSystemStateObservers() {
+        let workspace = NSWorkspace.shared.notificationCenter
+        let observe: (NotificationCenter, Notification.Name, @escaping @MainActor () -> Void) -> Void = { [weak self] center, name, action in
+            guard let self else { return }
+            center.publisher(for: name)
+                .receive(on: DispatchQueue.main)
+                .sink { _ in action() }
+                .store(in: &self.cancellables)
+        }
+
+        observe(workspace, NSWorkspace.screensDidSleepNotification) { [weak self] in
+            self?.setSystemSuspension(.displaysAsleep, active: true)
+        }
+        observe(workspace, NSWorkspace.screensDidWakeNotification) { [weak self] in
+            self?.setSystemSuspension(.displaysAsleep, active: false)
+        }
+        observe(workspace, NSWorkspace.willSleepNotification) { [weak self] in
+            self?.setSystemSuspension(.systemAsleep, active: true)
+        }
+        observe(workspace, NSWorkspace.didWakeNotification) { [weak self] in
+            self?.systemDidWake()
+        }
+        observe(workspace, NSWorkspace.sessionDidResignActiveNotification) { [weak self] in
+            self?.setSystemSuspension(.sessionInactive, active: true)
+        }
+        observe(workspace, NSWorkspace.sessionDidBecomeActiveNotification) { [weak self] in
+            self?.setSystemSuspension(.sessionInactive, active: false)
+        }
+        // A re-inserted drive may bring back a file that failed to load.
+        observe(workspace, NSWorkspace.didMountNotification) { [weak self] in
+            self?.retryFailedPlayback()
+        }
+
+        // Lock / screen saver are only published as distributed notifications.
+        let distributed = DistributedNotificationCenter.default()
+        observe(distributed, Notification.Name("com.apple.screenIsLocked")) { [weak self] in
+            self?.setSystemSuspension(.screenLocked, active: true)
+        }
+        observe(distributed, Notification.Name("com.apple.screenIsUnlocked")) { [weak self] in
+            self?.setSystemSuspension(.screenLocked, active: false)
+        }
+        observe(distributed, Notification.Name("com.apple.screensaver.didstart")) { [weak self] in
+            self?.setSystemSuspension(.screenSaver, active: true)
+        }
+        observe(distributed, Notification.Name("com.apple.screensaver.didstop")) { [weak self] in
+            self?.setSystemSuspension(.screenSaver, active: false)
+        }
+    }
+
+    func setSystemSuspension(_ reason: SystemSuspensionReason, active: Bool) {
+        guard systemSuspension.set(reason, active: active) else { return }
+        applySystemSuspension(trigger: "\(reason.rawValue)=\(active)")
+    }
+
+    func systemDidWake() {
+        // AVPlayer can come back stalled after sleep; clear failures so files
+        // on drives that re-mounted during wake get another try.
+        sessionManager.retryFailedPlayback()
+        if systemSuspension.systemDidWake() {
+            applySystemSuspension(trigger: "didWake")
+        } else if !shouldHaltPlayback {
+            synchronize(to: spaceMonitor.screenSpaces)
+        }
+    }
+
+    private func applySystemSuspension(trigger: String) {
+        isSystemSuspended = systemSuspension.isSuspended
+        LivelyLogger.wallpaper.info("System suspension \(self.isSystemSuspended ? "on" : "off") (\(trigger))")
+        applyPlaybackState()
+    }
+
+    private func retryFailedPlayback() {
+        sessionManager.retryFailedPlayback()
+        if !shouldHaltPlayback {
+            synchronize(to: spaceMonitor.screenSpaces)
+        }
     }
 
     // MARK: - Reactive Bindings
