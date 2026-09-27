@@ -59,3 +59,66 @@ struct AppPreferencesTests {
         #expect(AppPreferences(defaults: defaults).maxResolution == .p1080)
     }
 }
+
+@MainActor
+struct ResetDataTests {
+
+    @Test func resetRestoresShippedDefaultsButKeepsOnboarding() {
+        let suite = "lively.tests.reset.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let prefs = AppPreferences(defaults: defaults)
+        prefs.pauseOnBattery = false
+        prefs.batteryPauseThreshold = 80
+        prefs.checkForUpdates = true
+        prefs.playbackQuality = .powerSaver
+        prefs.loopBehavior = .playOnceFreeze
+        prefs.hardwareDecoding = false
+        prefs.maxResolution = .p1080
+        prefs.startMinimized = false
+        prefs.hasCompletedWelcome = true
+
+        prefs.resetToDefaults()
+
+        let freshSuite = "lively.tests.reset.fresh.\(UUID().uuidString)"
+        defer { UserDefaults(suiteName: freshSuite)?.removePersistentDomain(forName: freshSuite) }
+        let fresh = AppPreferences(defaults: UserDefaults(suiteName: freshSuite)!)
+        #expect(prefs.pauseOnBattery == fresh.pauseOnBattery)
+        #expect(prefs.batteryPauseThreshold == fresh.batteryPauseThreshold)
+        #expect(prefs.checkForUpdates == false)
+        #expect(prefs.playbackQuality == fresh.playbackQuality)
+        #expect(prefs.loopBehavior == fresh.loopBehavior)
+        #expect(prefs.hardwareDecoding == fresh.hardwareDecoding)
+        #expect(prefs.maxResolution == fresh.maxResolution)
+        #expect(prefs.startMinimized == fresh.startMinimized)
+        #expect(prefs.hasCompletedWelcome)
+
+        // Persisted, not just in memory.
+        let relaunched = AppPreferences(defaults: defaults)
+        #expect(relaunched.playbackQuality == .high)
+        #expect(relaunched.pauseOnBattery)
+    }
+
+    @Test func libraryRecoversAfterItsFolderIsDeleted() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("lively-lib-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let libraryDir = root.appendingPathComponent("Library")
+        let manager = WallpaperLibraryManager(libraryDir: libraryDir)
+
+        let source = root.appendingPathComponent("clip.mp4")
+        FileManager.default.createFile(atPath: source.path, contents: Data("x".utf8))
+        try manager.add(from: source)
+        #expect(manager.items.count == 1)
+
+        // Reset Data removes the whole Application Support folder.
+        try FileManager.default.removeItem(at: libraryDir)
+        manager.reload()
+        #expect(manager.items.isEmpty)
+
+        // Adding again must recreate the folder instead of failing.
+        try manager.add(from: source)
+        #expect(manager.items.count == 1)
+        #expect(manager.resolvedURL(for: manager.items[0]) != nil)
+    }
+}

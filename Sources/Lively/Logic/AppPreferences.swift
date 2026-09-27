@@ -265,6 +265,22 @@ public final class AppPreferences: ObservableObject {
         Self.applyAppAppearance(self.appearance)
     }
 
+    /// Restores every user-facing preference to its shipped default (used by
+    /// Settings ▸ Reset Data). Onboarding flags are kept so the welcome sheet
+    /// doesn't reappear.
+    public func resetToDefaults() {
+        startMinimized = true
+        pauseOnBattery = true
+        batteryPauseThreshold = 35
+        checkForUpdates = false
+        playbackQuality = .high
+        loopBehavior = .loop
+        hardwareDecoding = true
+        maxResolution = .matchSource
+        appearance = .system
+        defaults.removeObject(forKey: Keys.frameRateCapLegacy)
+    }
+
     nonisolated public static func clampThreshold(_ value: Double) -> Double {
         min(max(value, batteryThresholdRange.lowerBound), batteryThresholdRange.upperBound)
     }
