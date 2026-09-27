@@ -126,6 +126,7 @@ public final class AppPreferences: ObservableObject {
         static let pauseOnBattery = "prefs.pauseOnBattery"
         static let batteryPauseThreshold = "prefs.batteryPauseThreshold"
         static let checkForUpdates = "prefs.checkForUpdates"
+        static let updateCheckOptInMigrated = "prefs.updateCheckOptInMigrated"
         static let playbackQuality = "prefs.playbackQuality"
         static let loopBehavior = "prefs.loopBehavior"
         static let hardwareDecoding = "prefs.hardwareDecoding"
@@ -218,8 +219,12 @@ public final class AppPreferences: ObservableObject {
         if defaults.object(forKey: Keys.pauseOnBattery) == nil {
             defaults.set(true, forKey: Keys.pauseOnBattery)
         }
-        if defaults.object(forKey: Keys.checkForUpdates) == nil {
-            defaults.set(true, forKey: Keys.checkForUpdates)
+        // The GitHub update check is opt-in (README privacy promise). Builds up
+        // to 1.2.0 wrote `true` here as a default on first launch, which is
+        // indistinguishable from an explicit opt-in, so reset it once.
+        if !defaults.bool(forKey: Keys.updateCheckOptInMigrated) {
+            defaults.set(false, forKey: Keys.checkForUpdates)
+            defaults.set(true, forKey: Keys.updateCheckOptInMigrated)
         }
         if defaults.object(forKey: Keys.hardwareDecoding) == nil {
             defaults.set(true, forKey: Keys.hardwareDecoding)
