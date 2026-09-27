@@ -714,6 +714,9 @@ public final class WallpaperController: ObservableObject {
         configStore.$configs
             .sink { [weak self] _ in
                 Task { @MainActor [weak self] in
+                    // An edited assignment (e.g. re-choosing the same file
+                    // after fixing it) deserves a fresh attempt.
+                    self?.sessionManager.retryFailedPlayback()
                     self?.spaceMonitor.refresh()
                 }
             }
