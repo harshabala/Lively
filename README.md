@@ -40,7 +40,7 @@ brew install --cask lively
 1. Click the menu bar icon.
 2. On **Displays**, pick a display card.
 3. Drop an **MP4**, **MOV**, or **M4V** on the zone (or click to browse).
-4. Only **H.264** and **HEVC** work. Other codecs are rejected with a clear error.
+4. Only **H.264** and **HEVC** work. Other codecs, and damaged or incomplete files, are rejected with a clear error (on display cards and in the Library).
 
 ### Modes
 
@@ -62,6 +62,10 @@ Save videos once. Apply them to one display or all displays.
 
 Pause and resume all wallpapers from the top of the window.
 
+Lively also stops decoding on its own when nobody can see the video: while the displays or the Mac sleep, the screen is locked, the screen saver runs, you switch to another user, or a display's wallpaper is fully covered by a full-screen or maximised window. It resumes automatically.
+
+If a video goes missing (moved, deleted, or on an ejected drive), that display shows your normal macOS wallpaper and the card offers **Reselect**. Moved or renamed files are usually followed automatically; a re-inserted drive is picked up when it mounts.
+
 ## What it is
 
 | | |
@@ -77,6 +81,7 @@ Pause and resume all wallpapers from the top of the window.
 - **Files:** `.mp4`, `.mov`, `.m4v`
 - **Not App Store:** needs desktop-layer access the sandbox does not allow
 - **Not notarized:** clear quarantine once after download (see Install)
+- **Spaces** are told apart by their macOS desktop picture. Two Spaces on the same display with the same desktop picture share one clip.
 - **No playlists or schedules** yet
 - **Updates:** banner can open Releases; no auto-install
 
@@ -97,7 +102,7 @@ Needs Xcode or Command Line Tools.
 
 ## Privacy
 
-Assignments stay on your Mac. Security-scoped bookmarks remember the files you chose. No analytics. No network entitlement for core use. Optional update check only talks to GitHub Releases when enabled.
+Assignments stay on your Mac. Security-scoped bookmarks remember the files you chose. No analytics. Lively makes no network requests unless you turn on **Check for Updates** (off by default), which asks the GitHub Releases API for the latest version at launch. Note: Lively is not sandboxed (it has to draw below the desktop icons), so this is a promise kept by the code rather than enforced by an entitlement.
 
 ## License
 

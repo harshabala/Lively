@@ -297,10 +297,14 @@ public struct PreferencesView: View {
                 .alert("Reset Data?", isPresented: $showResetConfirm) {
                     Button("Cancel", role: .cancel) {}
                     Button("Reset Data", role: .destructive) {
+                        // Match the promise in the alert: assignments, library
+                        // files, and preferences all go back to a clean slate.
                         configStore.clearAllData()
+                        WallpaperLibraryManager.shared.reload()
+                        preferences.resetToDefaults()
                     }
                 } message: {
-                    Text("This removes every wallpaper assignment and restores preferences to defaults. This cannot be undone.")
+                    Text("This removes every wallpaper assignment and the videos saved in your Library, and restores preferences to defaults. Your original video files are not touched. This cannot be undone.")
                 }
                 .padding(.bottom, LivelyBrand.Spacing.lg)
             }

@@ -126,6 +126,7 @@ public final class AppPreferences: ObservableObject {
         static let pauseOnBattery = "prefs.pauseOnBattery"
         static let batteryPauseThreshold = "prefs.batteryPauseThreshold"
         static let checkForUpdates = "prefs.checkForUpdates"
+        static let updateCheckOptInMigrated = "prefs.updateCheckOptInMigrated"
         static let playbackQuality = "prefs.playbackQuality"
         static let loopBehavior = "prefs.loopBehavior"
         static let hardwareDecoding = "prefs.hardwareDecoding"
@@ -218,8 +219,12 @@ public final class AppPreferences: ObservableObject {
         if defaults.object(forKey: Keys.pauseOnBattery) == nil {
             defaults.set(true, forKey: Keys.pauseOnBattery)
         }
-        if defaults.object(forKey: Keys.checkForUpdates) == nil {
-            defaults.set(true, forKey: Keys.checkForUpdates)
+        // The GitHub update check is opt-in (README privacy promise). Builds up
+        // to 1.2.0 wrote `true` here as a default on first launch, which is
+        // indistinguishable from an explicit opt-in, so reset it once.
+        if !defaults.bool(forKey: Keys.updateCheckOptInMigrated) {
+            defaults.set(false, forKey: Keys.checkForUpdates)
+            defaults.set(true, forKey: Keys.updateCheckOptInMigrated)
         }
         if defaults.object(forKey: Keys.hardwareDecoding) == nil {
             defaults.set(true, forKey: Keys.hardwareDecoding)
@@ -258,6 +263,22 @@ public final class AppPreferences: ObservableObject {
         let appearanceRaw = defaults.string(forKey: Keys.appearance) ?? AppAppearance.system.rawValue
         self.appearance = AppAppearance(rawValue: appearanceRaw) ?? .system
         Self.applyAppAppearance(self.appearance)
+    }
+
+    /// Restores every user-facing preference to its shipped default (used by
+    /// Settings ▸ Reset Data). Onboarding flags are kept so the welcome sheet
+    /// doesn't reappear.
+    public func resetToDefaults() {
+        startMinimized = true
+        pauseOnBattery = true
+        batteryPauseThreshold = 35
+        checkForUpdates = false
+        playbackQuality = .high
+        loopBehavior = .loop
+        hardwareDecoding = true
+        maxResolution = .matchSource
+        appearance = .system
+        defaults.removeObject(forKey: Keys.frameRateCapLegacy)
     }
 
     nonisolated public static func clampThreshold(_ value: Double) -> Double {

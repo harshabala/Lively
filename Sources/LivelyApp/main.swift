@@ -3,7 +3,7 @@ import SwiftUI
 import LivelyCore
 
 @MainActor
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     static func main() {
         let app = NSApplication.shared
@@ -35,6 +35,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        removeEventMonitor()
         wallpaperController.tearDown()
         configStore.flushPendingPersist()
     }
@@ -63,6 +64,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         popover = NSPopover()
         popover.contentSize = SettingsContainerView.windowSize
         popover.behavior = .transient
+        popover.delegate = self
         popover.contentViewController = hosting
 
         // Start Minimized off → open settings once after launch.
@@ -92,7 +94,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let button = statusItem.button {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: NSRectEdge.minY)
             
-            // Close popover when clicking outside
+            // Close popover when clicking outside. Replace any previous monitor:
+            // a transient popover can close itself without going through
+            // closePopover, which used to leak one global monitor per open.
+            removeEventMonitor()
             eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
                 if let self = self, self.popover.isShown {
                     self.closePopover(event)
@@ -103,10 +108,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func closePopover(_ sender: AnyObject?) {
         popover.performClose(sender)
-        if let eventMonitor = eventMonitor {
+        removeEventMonitor()
+    }
+
+    private func removeEventMonitor() {
+        if let eventMonitor {
             NSEvent.removeMonitor(eventMonitor)
             self.eventMonitor = nil
         }
+    }
+
+    // MARK: - NSPopoverDelegate
+
+    nonisolated func popoverDidClose(_ notification: Notification) {
+        MainActor.assumeIsolated { removeEventMonitor() }
     }
 }
 

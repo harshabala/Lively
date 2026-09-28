@@ -215,16 +215,32 @@ public class ConfigStore: ObservableObject {
         
         var updatedBookmarks = config.bookmarks
         updatedBookmarks[bookmarkKey] = newData
-        
+
+        // A stale bookmark usually means the file was moved or renamed; keep the
+        // stored path in step so the UI shows the real name.
+        let wallpaper = Self.wallpaper(config.dynamicWallpaper, replacing: bookmarkKey, with: url)
+
         let refreshed = SpaceConfig(
             spaceKey: config.spaceKey,
-            dynamicWallpaper: config.dynamicWallpaper,
+            dynamicWallpaper: wallpaper,
             bookmarks: updatedBookmarks,
             addedAt: config.addedAt
         )
         configs[spaceKey] = refreshed
         persist()
         LivelyLogger.config.info("Bookmark upgraded to security-scoped for \(bookmarkKey)")
+    }
+
+    static func wallpaper(_ wallpaper: DynamicWallpaper, replacing bookmarkKey: String, with url: URL) -> DynamicWallpaper {
+        var updated = wallpaper
+        let fileURL = URL(fileURLWithPath: url.path)
+        switch bookmarkKey {
+        case "static": updated.staticURL = fileURL
+        case "light": updated.lightURL = fileURL
+        case "dark": updated.darkURL = fileURL
+        default: break
+        }
+        return updated
     }
 
     /// Updates only the display settings (gravity, mute, volume) for an existing config.
@@ -246,17 +262,6 @@ public class ConfigStore: ObservableObject {
         )
         configs[key] = refreshed
         persist()
-    }
-
-    /// Removes configs whose spaceKeys don't match any currently active screen space.
-    public func pruneOrphanedConfigs(activeSpaceKeys: Set<String>) {
-        let orphaned = configs.keys.filter { !activeSpaceKeys.contains($0) }
-        guard !orphaned.isEmpty else { return }
-        for key in orphaned {
-            configs.removeValue(forKey: key)
-        }
-        persist()
-        LivelyLogger.config.info("Pruned \(orphaned.count) orphaned config(s)")
     }
 
     public func remove(spaceKey: String) {
@@ -308,8 +313,7 @@ public class ConfigStore: ObservableObject {
 
         let workItem = DispatchWorkItem { @Sendable [configFileURL, weak self] in
             do {
-                let data = try JSONEncoder().encode(snapshot)
-                try data.write(to: configFileURL, options: .atomic)
+                try Self.write(snapshot, to: configFileURL)
             } catch {
                 DispatchQueue.main.async {
                     self?.errors.send(.persistFailed(error))
@@ -324,6 +328,16 @@ public class ConfigStore: ObservableObject {
         persistQueue.asyncAfter(deadline: .now() + .milliseconds(300), execute: workItem)
     }
 
+    /// Atomic write that recreates the directory (it is removed by Reset Data).
+    nonisolated private static func write(_ snapshot: [String: SpaceConfig], to url: URL) throws {
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let data = try JSONEncoder().encode(snapshot)
+        try data.write(to: url, options: .atomic)
+    }
+
     public func flushPendingPersist() {
         guard let pending = pendingPersistWorkItem else { return }
         pending.cancel()
@@ -333,8 +347,7 @@ public class ConfigStore: ObservableObject {
         let fileURL = self.configFileURL
         persistQueue.sync {
             do {
-                let data = try JSONEncoder().encode(snapshot)
-                try data.write(to: fileURL, options: .atomic)
+                try Self.write(snapshot, to: fileURL)
                 LivelyLogger.config.info("Config flushed synchronously on exit")
             } catch {
                 LivelyLogger.config.error("Failed to flush config on exit: \(error.localizedDescription)")
@@ -349,28 +362,54 @@ public class ConfigStore: ObservableObject {
             return
         }
 
+        let data: Data
         do {
-            let data = try Data(contentsOf: configFileURL)
-            let decoded = try JSONDecoder().decode([String: SpaceConfig].self, from: data)
-            configs = decoded
-            sanitizeLoadedConfigs()
-            LivelyLogger.config.info("Loaded \(self.configs.count) assignment(s)")
+            data = try Data(contentsOf: configFileURL)
         } catch {
             errors.send(.loadFailed(error))
-            LivelyLogger.config.error("Failed to load existing config, starting fresh: \(error.localizedDescription)")
+            LivelyLogger.config.error("Failed to read config, starting fresh: \(error.localizedDescription)")
+            return
+        }
+
+        do {
+            // Decode entry-by-entry so one bad or future-schema assignment
+            // doesn't throw away every other display's wallpaper.
+            let decoded = try JSONDecoder().decode([String: LossyDecodable<SpaceConfig>].self, from: data)
+            configs = decoded.compactMapValues(\.value)
+            let dropped = decoded.count - configs.count
+            if dropped > 0 {
+                LivelyLogger.config.error("Dropped \(dropped) unreadable assignment(s) from config")
+            }
+            sanitizeLoadedConfigs(forcePersist: dropped > 0)
+            LivelyLogger.config.info("Loaded \(self.configs.count) assignment(s)")
+        } catch {
+            // Not even a JSON object: keep a copy for diagnosis instead of
+            // silently overwriting it on the next save.
+            errors.send(.loadFailed(error))
+            let backup = Self.corruptBackupURL(for: configFileURL)
+            try? fm.removeItem(at: backup)
+            try? fm.moveItem(at: configFileURL, to: backup)
+            LivelyLogger.config.error("Config was unreadable; moved aside to \(backup.lastPathComponent) and starting fresh: \(error.localizedDescription)")
             configs = [:]
         }
     }
 
+    static func corruptBackupURL(for url: URL) -> URL {
+        url.deletingPathExtension().appendingPathExtension("corrupt.json")
+    }
+
     /// Drops configs with invalid extensions or missing required bookmarks.
-    private func sanitizeLoadedConfigs() {
+    private func sanitizeLoadedConfigs(forcePersist: Bool) {
         let before = configs.count
         configs = configs.filter { _, config in
             isConfigPlayable(config)
         }
-        guard configs.count != before else { return }
-        LivelyLogger.config.info("Sanitized config: dropped \(before - configs.count) invalid assignment(s)")
-        persist()
+        if configs.count != before {
+            LivelyLogger.config.info("Sanitized config: dropped \(before - self.configs.count) invalid assignment(s)")
+        }
+        if forcePersist || configs.count != before {
+            persist()
+        }
     }
 
     private func isConfigPlayable(_ config: SpaceConfig) -> Bool {
@@ -386,5 +425,17 @@ public class ConfigStore: ObservableObject {
             let hasDark = wallpaper.darkURL.map { isValidLivelyVideoFile($0) && config.bookmarks["dark"] != nil } ?? false
             return hasLight || hasDark
         }
+    }
+}
+
+// MARK: - Lossy decoding
+
+/// Decodes a value if possible and swallows the error otherwise, so a single
+/// malformed entry in a keyed collection doesn't fail the whole document.
+struct LossyDecodable<Value: Decodable>: Decodable {
+    let value: Value?
+
+    init(from decoder: Decoder) throws {
+        value = try? Value(from: decoder)
     }
 }

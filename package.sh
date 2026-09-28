@@ -5,7 +5,14 @@ set -euo pipefail
 # Prefer full Xcode when present (best SDK/tooling). Otherwise fall back to
 # Command Line Tools — UI uses ViewState instead of the SwiftUI @State macro
 # so CLT builds succeed without SwiftUIMacros.
-if [[ -d "/Applications/Xcode.app/Contents/Developer" ]]; then
+# Respect an explicitly chosen toolchain first: CI selects a specific Xcode via
+# xcode-select, and /Applications/Xcode.app on runners is an older default.
+selected_dir="$(xcode-select -p 2>/dev/null || true)"
+if [[ -n "${DEVELOPER_DIR:-}" && -d "${DEVELOPER_DIR}" ]]; then
+    :
+elif [[ "${selected_dir}" == *.app/Contents/Developer && -d "${selected_dir}" ]]; then
+    export DEVELOPER_DIR="${selected_dir}"
+elif [[ -d "/Applications/Xcode.app/Contents/Developer" ]]; then
     export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
 elif [[ -d "/Library/Developer/CommandLineTools" ]]; then
     export DEVELOPER_DIR="/Library/Developer/CommandLineTools"

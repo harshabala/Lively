@@ -211,6 +211,12 @@ public struct LibraryView: View {
             Task { @MainActor in
                 var failures = 0
                 for url in panel.urls {
+                    // Same codec/integrity gate as display cards.
+                    if case .invalid(let message) = await VideoValidator.validate(url) {
+                        failures += 1
+                        addError = "\(url.lastPathComponent): \(message)"
+                        continue
+                    }
                     do {
                         try libraryManager.add(from: url)
                     } catch {

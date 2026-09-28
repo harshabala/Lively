@@ -2,6 +2,29 @@
 
 All notable changes to Lively are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Per-Space and per-display assignments were being deleted.** Switching Spaces, unplugging a monitor, or launching without it wiped the clips assigned to the Spaces/displays not currently visible. They now persist.
+- **Update check is opt-in, as documented.** Earlier builds turned it on at first launch. Existing installs are switched off once; turn it back on in Settings if you want it.
+- Library imports now get the same H.264/HEVC check as display cards; damaged or truncated files are rejected with a clear message everywhere.
+- A file that fails to play (corrupt, missing, ejected drive) no longer leaves a black window over the desktop; Lively falls back to your macOS wallpaper and retries when a drive mounts, after wake, or when you re-choose the file.
+- Reset Data now also restores preferences to defaults (as its alert promised), refreshes the Library, and new assignments/imports save correctly afterwards.
+- One malformed entry in the saved config no longer discards every assignment; an unreadable config is kept as `config_v2.corrupt.json` instead of being overwritten.
+- Moved or renamed videos update the stored path when their bookmark is refreshed.
+- The popover no longer leaks a global mouse monitor each time it closes itself.
+- Update check: session is invalidated after each request, hard 12 s timeout, correct handling of pre-release tags and junk responses.
+
+### Changed
+
+- Wallpapers stop decoding while displays or the Mac sleep, the screen is locked, the screen saver runs, another user is active, or the wallpaper is fully covered, and resume automatically.
+
+### Tests / CI
+
+- New suites for update checking (stubbed network), video validation with generated H.264 and Motion-JPEG clips, config persistence/migration, preferences, Reset Data, and system suspension.
+- New CI workflow runs build, tests, and packaging on every push and pull request.
+
 ## [1.2.0] - 2026-07-14
 
 ### Added

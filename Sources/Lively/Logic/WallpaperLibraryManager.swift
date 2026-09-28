@@ -68,6 +68,8 @@ public final class WallpaperLibraryManager: ObservableObject {
         let fileName = "\(id).\(ext)"
         let destination = libraryDir.appendingPathComponent(fileName)
 
+        // The directory may have been removed by Reset Data.
+        try fileManager.createDirectory(at: libraryDir, withIntermediateDirectories: true)
         if fileManager.fileExists(atPath: destination.path) {
             try fileManager.removeItem(at: destination)
         }
@@ -101,6 +103,13 @@ public final class WallpaperLibraryManager: ObservableObject {
         saveIndex()
     }
 
+    /// Re-reads the index from disk and drops entries whose files are gone
+    /// (e.g. after Reset Data removed the Application Support folder).
+    public func reload() {
+        loadIndex()
+        reconcileMissingFiles()
+    }
+
     // MARK: - Persistence
 
     private func loadIndex() {
@@ -119,6 +128,7 @@ public final class WallpaperLibraryManager: ObservableObject {
 
     private func saveIndex() {
         do {
+            try fileManager.createDirectory(at: libraryDir, withIntermediateDirectories: true)
             let data = try JSONEncoder().encode(items)
             try data.write(to: indexURL, options: .atomic)
         } catch {
