@@ -362,8 +362,10 @@ private final class WallpaperSessionManager {
         guard !isPaused else { return }
 
         for space in spaces {
-            var session = sessions[space.id]
-            if session == nil {
+            let session: WallpaperSession
+            if let existing = sessions[space.id] {
+                session = existing
+            } else {
                 session = WallpaperSession(screen: space.screen)
                 sessions[space.id] = session
             }
@@ -372,7 +374,7 @@ private final class WallpaperSessionManager {
             let wallpaperConfig = configStore.configs[spaceKey]?.dynamicWallpaper ?? DynamicWallpaper()
 
             if let videoURL = bookmarkManager.urlForSpace(space, appearance: appearance) {
-                session?.play(
+                session.play(
                     url: videoURL,
                     wallpaper: wallpaperConfig,
                     screen: space.screen,
@@ -382,7 +384,7 @@ private final class WallpaperSessionManager {
                 )
             } else {
                 bookmarkManager.stopScope(for: spaceKey)
-                session?.hide()
+                session.hide()
             }
         }
     }
@@ -532,10 +534,7 @@ public final class WallpaperController: ObservableObject {
     }
 
     private func setupBatteryMonitor() {
-        // Lightweight poll — power-source CF notifications are awkward to bridge;
-        // 30s is enough for "pause on battery" without battery impact.
-        // Poll power source periodically (IOKit has no simple Combine publisher).
-        // 20s is responsive enough for "pause on battery" without busy-waiting.
+        // IOKit has no simple Combine publisher; 20s is enough for battery pause.
         powerSourceTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.refreshBatteryState()
@@ -848,6 +847,4 @@ enum PowerSourceMonitor {
 
         return Snapshot(isOnBattery: onBattery, levelPercent: level)
     }
-
-    static var isOnBattery: Bool { snapshot().isOnBattery }
 }

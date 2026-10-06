@@ -47,9 +47,6 @@ class WallpaperWindow: NSWindow {
         self.canHide = false
         self.sharingType = .none
         self.animationBehavior = .none
-
-        // Cover the full screen frame
-        setFrame(screen.frame, display: false)
     }
 
     // MARK: - Ordering
