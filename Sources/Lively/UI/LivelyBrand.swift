@@ -12,33 +12,15 @@ enum LivelyBrand {
 
     // Semantic neutrals — prefer system colors so light/dark inherit correctly.
     static var background: Color { Color(nsColor: .windowBackgroundColor) }
-    static var backgroundLifted: Color { Color(nsColor: .controlBackgroundColor) }
     static var card: Color { Color(nsColor: .controlBackgroundColor) }
     /// Elevated/control surface fill (not brand accent). Prefer this over inventing greys.
     static var controlFill: Color { Color(nsColor: .controlBackgroundColor) }
     static var foreground: Color { Color(nsColor: .labelColor) }
     static var mutedForeground: Color { Color(nsColor: .secondaryLabelColor) }
     static var border: Color { Color(nsColor: .separatorColor) }
-    static var logBackground: Color { Color(nsColor: .textBackgroundColor) }
 
     /// Brand-tint fill for selected sidebar rows only (interactive selection language).
     static var selectionFill: Color { primary.opacity(0.13) }
-
-    static var backgroundGradient: LinearGradient {
-        LinearGradient(
-            colors: [background, backgroundLifted],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
-    static var accentGradient: LinearGradient {
-        LinearGradient(
-            colors: [primary, primarySoft],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-    }
 
     enum Spacing {
         static let tiny: CGFloat = 3

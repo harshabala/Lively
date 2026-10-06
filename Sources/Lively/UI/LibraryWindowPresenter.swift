@@ -37,4 +37,3 @@ public final class LibraryWindowController: NSObject, NSWindowDelegate {
     }
 }
 
-
