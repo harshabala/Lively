@@ -126,7 +126,7 @@ struct ScreenCardView: View {
                             clearDark()
                         }
                     )
-                    .transition(modeTransition)
+                    .transition(LivelyBrand.contentTransition)
                 }
             }
             .padding(.horizontal, LivelyBrand.Spacing.md)
@@ -510,29 +510,12 @@ struct ScreenCardView: View {
         }
     }
 
-    private var modeTransition: AnyTransition {
-        LivelyBrand.contentTransition
-    }
-
     // MARK: Drop Zone
 
     private func refreshResolvedURLs() {
-        let wallpaper = currentWallpaper
-        resolvedStaticURL = configStore.resolveBookmark(
-            for: space.spaceKey,
-            bookmarkKey: "static",
-            fallbackURL: wallpaper.staticURL
-        )
-        resolvedLightURL = configStore.resolveBookmark(
-            for: space.spaceKey,
-            bookmarkKey: "light",
-            fallbackURL: wallpaper.lightURL
-        )
-        resolvedDarkURL = configStore.resolveBookmark(
-            for: space.spaceKey,
-            bookmarkKey: "dark",
-            fallbackURL: wallpaper.darkURL
-        )
+        resolvedStaticURL = configStore.resolveBookmark(for: space.spaceKey, bookmarkKey: "static")
+        resolvedLightURL = configStore.resolveBookmark(for: space.spaceKey, bookmarkKey: "light")
+        resolvedDarkURL = configStore.resolveBookmark(for: space.spaceKey, bookmarkKey: "dark")
     }
 
     // C-1 fix: DropZoneView owns its own @ViewState so each instance has
@@ -587,7 +570,6 @@ struct ScreenCardView: View {
             updated.darkURL = url
         }
         configStore.assign(dynamicWallpaper: updated, toSpaceKey: space.spaceKey)
-        AppMetrics.shared.recordWallpaperApplied()
         showPlayingBanner = true
         AccessibilityNotification.Announcement("Playing on this display.").post()
         if wasFirstTime || !preferences.hasSeenSpacesCoach {
@@ -627,14 +609,6 @@ struct ScreenCardView: View {
         configStore.applyStaticWallpaper(url, toAllSpaceKeys: keys)
         showPlayingBanner = true
         AccessibilityNotification.Announcement("Wallpaper applied to all displays.").post()
-    }
-
-    private func showSuccessMessage() {
-        showPlayingBanner = true
-        if !preferences.hasSeenSpacesCoach {
-            showSpacesCoach = true
-        }
-        AccessibilityNotification.Announcement("Playing on this display.").post()
     }
 
     private func showError(_ message: String) {
