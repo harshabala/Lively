@@ -241,7 +241,6 @@ public struct LibraryView: View {
         wallpaperConfig.mode = .staticVideo
         wallpaperConfig.staticURL = localURL
         configStore.assign(dynamicWallpaper: wallpaperConfig, toSpaceKey: spaceKey)
-        AppMetrics.shared.recordWallpaperApplied()
         addError = nil
     }
 
@@ -252,7 +251,6 @@ public struct LibraryView: View {
             return
         }
         configStore.applyStaticWallpaper(localURL, toAllSpaceKeys: keys)
-        AppMetrics.shared.recordWallpaperApplied()
         addError = nil
     }
 

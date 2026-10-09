@@ -66,36 +66,26 @@ public final class LogStore: ObservableObject {
 public struct LivelyCategoryLogger: Sendable {
     let category: String
     private let osLogger: Logger
-    
+
     init(category: String) {
         self.category = category
         self.osLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Lively", category: category)
     }
-    
-    public func info(_ message: String) {
-        osLogger.info("\(message, privacy: .public)")
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
-            Task { @MainActor in
-                LogStore.shared.add(message, level: .info, category: category)
-            }
+
+    public func info(_ message: String) { log(.info, message) }
+    public func error(_ message: String) { log(.error, message) }
+    public func debug(_ message: String) { log(.debug, message) }
+
+    private func log(_ level: LogLevel, _ message: String) {
+        switch level {
+        case .info: osLogger.info("\(message, privacy: .public)")
+        case .warning: osLogger.warning("\(message, privacy: .public)")
+        case .error: osLogger.error("\(message, privacy: .public)")
+        case .debug: osLogger.debug("\(message, privacy: .public)")
         }
-    }
-    
-    public func error(_ message: String) {
-        osLogger.error("\(message, privacy: .public)")
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
-            Task { @MainActor in
-                LogStore.shared.add(message, level: .error, category: category)
-            }
-        }
-    }
-    
-    public func debug(_ message: String) {
-        osLogger.debug("\(message, privacy: .public)")
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
-            Task { @MainActor in
-                LogStore.shared.add(message, level: .debug, category: category)
-            }
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
+        Task { @MainActor in
+            LogStore.shared.add(message, level: level, category: category)
         }
     }
 }

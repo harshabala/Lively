@@ -160,29 +160,25 @@ public struct PreferencesView: View {
                 switch section {
                 case .general:
                     generalPane
-                        .transition(paneTransition)
+                        .transition(LivelyBrand.contentTransition)
                 case .playback:
                     playbackPane
-                        .transition(paneTransition)
+                        .transition(LivelyBrand.contentTransition)
                 case .screenSetup:
                     screenSetupPane
-                        .transition(paneTransition)
+                        .transition(LivelyBrand.contentTransition)
                 case .logs:
                     logsPane
-                        .transition(paneTransition)
+                        .transition(LivelyBrand.contentTransition)
                 case .about:
                     aboutPane
-                        .transition(paneTransition)
+                        .transition(LivelyBrand.contentTransition)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .animation(reduceMotion ? nil : LivelyBrand.Motion.normal, value: section)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private var paneTransition: AnyTransition {
-        LivelyBrand.contentTransition
     }
 
     private func paneHeader(title: String, subtitle: String) -> some View {
@@ -424,7 +420,7 @@ public struct PreferencesView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: LivelyBrand.Spacing.lg) {
                 paneHeader(title: "About", subtitle: SettingsSection.about.subtitle)
-                AboutView(compact: true)
+                AboutView()
                     .padding(.horizontal, LivelyBrand.Spacing.lg)
                     .padding(.bottom, LivelyBrand.Spacing.lg)
             }

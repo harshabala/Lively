@@ -11,6 +11,7 @@ struct DynamicWallpaperTests {
         wallpaper.mode = .staticVideo
         wallpaper.staticURL = URL(fileURLWithPath: "/tmp/static.mp4")
         #expect(wallpaper.url(for: nil) == wallpaper.staticURL)
+        #expect(wallpaper.url(for: NSAppearance(named: .darkAqua)) == wallpaper.staticURL)
     }
 
     // MARK: - Appearance Mode
@@ -78,12 +79,5 @@ struct DynamicWallpaperTests {
         #expect(wallpaper.staticURL == nil)
         #expect(wallpaper.lightURL == nil)
         #expect(wallpaper.darkURL == nil)
-    }
-
-    @Test func nilAppearanceInStaticMode() {
-        var wallpaper = DynamicWallpaper()
-        wallpaper.mode = .staticVideo
-        wallpaper.staticURL = URL(fileURLWithPath: "/tmp/video.mp4")
-        #expect(wallpaper.url(for: nil) == wallpaper.staticURL)
     }
 }

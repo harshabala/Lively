@@ -2,12 +2,7 @@ import SwiftUI
 import AppKit
 
 public struct AboutView: View {
-    /// Compact layout for the Settings sidebar pane (matches design collage).
-    public var compact: Bool
-
-    public init(compact: Bool = false) {
-        self.compact = compact
-    }
+    public init() {}
 
     private var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -16,16 +11,6 @@ public struct AboutView: View {
     }
 
     public var body: some View {
-        if compact {
-            compactBody
-        } else {
-            legacyBody
-        }
-    }
-
-    // MARK: - Settings → About (collage)
-
-    private var compactBody: some View {
         VStack(spacing: LivelyBrand.Spacing.lg) {
             VStack(spacing: LivelyBrand.Spacing.md) {
                 ZStack {
@@ -158,84 +143,5 @@ public struct AboutView: View {
 
     private var privacyURL: URL? {
         URL(string: "https://github.com/harshabala/Lively/blob/master/README.md#privacy")
-    }
-
-    // MARK: - Legacy layout (if reused elsewhere)
-
-    private var legacyBody: some View {
-        HStack(alignment: .top, spacing: LivelyBrand.Spacing.xl) {
-            VStack(alignment: .leading, spacing: LivelyBrand.Spacing.lg) {
-                HStack(alignment: .top, spacing: LivelyBrand.Spacing.lg) {
-                    if let appIcon = NSImage(named: NSImage.applicationIconName) {
-                        Image(nsImage: appIcon)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 64, height: 64)
-                            .shadow(
-                                color: LivelyBrand.Shadow.color,
-                                radius: LivelyBrand.Shadow.radius,
-                                x: LivelyBrand.Shadow.x,
-                                y: LivelyBrand.Shadow.y
-                            )
-                    } else {
-                        Image(systemName: "play.tv.fill")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 64, height: 64)
-                            .foregroundStyle(LivelyBrand.primary)
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Lively")
-                            .font(LivelyBrand.Typography.title)
-                            .foregroundStyle(LivelyBrand.foreground)
-
-                        Text(appVersion)
-                            .font(LivelyBrand.Typography.mono)
-                            .foregroundStyle(LivelyBrand.mutedForeground)
-
-                        Text("Video wallpapers for each Space on your Mac.")
-                            .font(LivelyBrand.Typography.caption)
-                            .foregroundStyle(LivelyBrand.mutedForeground)
-                            .padding(.top, LivelyBrand.Spacing.sm)
-                    }
-                }
-
-                if let releasesURL = URL(string: "https://github.com/harshabala/Lively/releases") {
-                    Link("View releases on GitHub", destination: releasesURL)
-                        .font(LivelyBrand.Typography.caption)
-                }
-            }
-
-            Divider()
-                .overlay(LivelyBrand.border.opacity(0.35))
-                .padding(.horizontal, LivelyBrand.Spacing.sm)
-
-            VStack(alignment: .leading, spacing: LivelyBrand.Spacing.lg) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Formats")
-                        .font(LivelyBrand.Typography.caption.weight(.bold))
-                        .foregroundStyle(LivelyBrand.foreground.opacity(0.8))
-                    Text("H.264 · HEVC (H.265)")
-                        .font(LivelyBrand.Typography.caption)
-                        .foregroundStyle(LivelyBrand.mutedForeground)
-                    Text("MP4 · MOV · M4V · Up to 4K")
-                        .font(LivelyBrand.Typography.caption)
-                        .foregroundStyle(LivelyBrand.mutedForeground)
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("File Size")
-                        .font(LivelyBrand.Typography.caption.weight(.bold))
-                        .foregroundStyle(LivelyBrand.foreground.opacity(0.8))
-                    Text("No limit. Hardware-accelerated decoding for full 4K playback.")
-                        .font(LivelyBrand.Typography.caption)
-                        .foregroundStyle(LivelyBrand.mutedForeground)
-                        .lineLimit(2)
-                }
-            }
-            .padding(.top, 4)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

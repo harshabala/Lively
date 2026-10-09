@@ -7,15 +7,24 @@ import Combine
 public struct SpaceConfig: Codable, Sendable {
     /// Composite key: "displayID:desktopImageURL.absoluteString"
     public let spaceKey: String
-    
+
     /// The dynamic wallpaper configuration.
     public let dynamicWallpaper: DynamicWallpaper
-    
+
     /// Bookmarks for all relevant URLs.
     /// Key: "static", "light", "dark".
     public let bookmarks: [String: Data]
-    
+
     public let addedAt: Date
+
+    func replacing(dynamicWallpaper: DynamicWallpaper? = nil, bookmarks: [String: Data]? = nil) -> SpaceConfig {
+        SpaceConfig(
+            spaceKey: spaceKey,
+            dynamicWallpaper: dynamicWallpaper ?? self.dynamicWallpaper,
+            bookmarks: bookmarks ?? self.bookmarks,
+            addedAt: addedAt
+        )
+    }
 }
 
 // MARK: - ConfigStore
@@ -66,33 +75,15 @@ public class ConfigStore: ObservableObject {
         AppMetrics.shared.recordWallpaperApplied()
         
         var bookmarks: [String: Data] = [:]
-
-        func bookmark(for url: URL?, key: String) -> Data? {
-            guard let url else { return nil }
-            do {
-                return try url.bookmarkData(
-                    options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
-                    includingResourceValuesForKeys: nil,
-                    relativeTo: nil
-                )
-            } catch {
-                errors.send(.bookmarkCreationFailed(key))
-                LivelyLogger.config.error("Failed to create bookmark for \(key): \(error.localizedDescription)")
-                return nil
-            }
-        }
-
-        if let url = dynamicWallpaper.staticURL {
-            guard let data = bookmark(for: url, key: "static") else { return }
-            bookmarks["static"] = data
-        }
-        if let url = dynamicWallpaper.lightURL {
-            guard let data = bookmark(for: url, key: "light") else { return }
-            bookmarks["light"] = data
-        }
-        if let url = dynamicWallpaper.darkURL {
-            guard let data = bookmark(for: url, key: "dark") else { return }
-            bookmarks["dark"] = data
+        let sources: [(String, URL?)] = [
+            ("static", dynamicWallpaper.staticURL),
+            ("light", dynamicWallpaper.lightURL),
+            ("dark", dynamicWallpaper.darkURL),
+        ]
+        for (bookmarkKey, url) in sources {
+            guard let url else { continue }
+            guard let data = makeBookmarkData(for: url, key: bookmarkKey) else { return }
+            bookmarks[bookmarkKey] = data
         }
 
         let config = SpaceConfig(
@@ -130,8 +121,18 @@ public class ConfigStore: ObservableObject {
             return nil
         }
 
-        var isStale = false
+        return resolveURL(fromBookmark: data, spaceKey: spaceKey, bookmarkKey: bookmarkKey, verbose: true)
+    }
 
+    /// Resolves a specific bookmark key directly.
+    /// Used by secondary components like VideoThumbnailView to gain access.
+    public func resolveBookmark(for spaceKey: String, bookmarkKey: String) -> URL? {
+        guard let data = configs[spaceKey]?.bookmarks[bookmarkKey] else { return nil }
+        return resolveURL(fromBookmark: data, spaceKey: spaceKey, bookmarkKey: bookmarkKey, verbose: false)
+    }
+
+    private func resolveURL(fromBookmark data: Data, spaceKey: String, bookmarkKey: String, verbose: Bool) -> URL? {
+        var isStale = false
         do {
             let resolved = try URL(
                 resolvingBookmarkData: data,
@@ -139,13 +140,13 @@ public class ConfigStore: ObservableObject {
                 relativeTo: nil,
                 bookmarkDataIsStale: &isStale
             )
-
             if isStale {
-                LivelyLogger.config.info("Refreshing stale bookmark for \(bookmarkKey)")
+                if verbose { LivelyLogger.config.info("Refreshing stale bookmark for \(bookmarkKey)") }
                 refreshBookmark(spaceKey: spaceKey, bookmarkKey: bookmarkKey, url: resolved)
             }
-
-            LivelyLogger.config.info("Resolved \(bookmarkKey) via security-scoped bookmark → \(resolved.lastPathComponent)")
+            if verbose {
+                LivelyLogger.config.info("Resolved \(bookmarkKey) via security-scoped bookmark → \(resolved.lastPathComponent)")
+            }
             return resolved
         } catch {
             do {
@@ -156,44 +157,43 @@ public class ConfigStore: ObservableObject {
                     relativeTo: nil,
                     bookmarkDataIsStale: &legacyStale
                 )
-                LivelyLogger.config.info("Legacy bookmark resolved for \(bookmarkKey), upgrading to security-scoped")
+                if verbose {
+                    LivelyLogger.config.info("Legacy bookmark resolved for \(bookmarkKey), upgrading to security-scoped")
+                }
                 refreshBookmark(spaceKey: spaceKey, bookmarkKey: bookmarkKey, url: legacyResolved)
                 return legacyResolved
             } catch let legacyError {
-                LivelyLogger.config.error("Bookmark resolution failed for \(bookmarkKey). Primary error: \(error.localizedDescription). Legacy fallback error: \(legacyError.localizedDescription)")
+                if verbose {
+                    LivelyLogger.config.error("Bookmark resolution failed for \(bookmarkKey). Primary error: \(error.localizedDescription). Legacy fallback error: \(legacyError.localizedDescription)")
+                }
                 return nil
             }
         }
     }
-    
-    /// Resolves a specific bookmark key directly.
-    /// Used by secondary components like VideoThumbnailView to gain access.
-    public func resolveBookmark(for spaceKey: String, bookmarkKey: String, fallbackURL: URL?) -> URL? {
-        guard let config = configs[spaceKey] else { return nil }
-        guard let data = config.bookmarks[bookmarkKey] else { return nil }
-        
-        var isStale = false
+
+    private func makeBookmarkData(for url: URL, key: String) -> Data? {
         do {
-            let resolved = try URL(resolvingBookmarkData: data, options: [.withSecurityScope], relativeTo: nil, bookmarkDataIsStale: &isStale)
-            if isStale { refreshBookmark(spaceKey: spaceKey, bookmarkKey: bookmarkKey, url: resolved) }
-            return resolved
+            return try Self.securityScopedBookmarkData(for: url)
         } catch {
-            do {
-                var legacyStale = false
-                let legacyResolved = try URL(resolvingBookmarkData: data, options: [], relativeTo: nil, bookmarkDataIsStale: &legacyStale)
-                refreshBookmark(spaceKey: spaceKey, bookmarkKey: bookmarkKey, url: legacyResolved)
-                return legacyResolved
-            } catch {
-                return nil
-            }
+            errors.send(.bookmarkCreationFailed(key))
+            LivelyLogger.config.error("Failed to create bookmark for \(key): \(error.localizedDescription)")
+            return nil
         }
     }
-    
+
+    nonisolated private static func securityScopedBookmarkData(for url: URL) throws -> Data {
+        try url.bookmarkData(
+            options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        )
+    }
+
     /// Re-creates a bookmark for a URL with security scope.
     private func refreshBookmark(spaceKey: String, bookmarkKey: String, url: URL) {
         let didStart = url.startAccessingSecurityScopedResource()
         defer { if didStart { url.stopAccessingSecurityScopedResource() } }
-        
+
         guard let config = configs[spaceKey] else {
             errors.send(.bookmarkRefreshFailed(bookmarkKey))
             LivelyLogger.config.error("No config found while refreshing bookmark for \(bookmarkKey)")
@@ -202,31 +202,22 @@ public class ConfigStore: ObservableObject {
 
         let newData: Data
         do {
-            newData = try url.bookmarkData(
-                options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
-                includingResourceValuesForKeys: nil,
-                relativeTo: nil
-            )
+            newData = try Self.securityScopedBookmarkData(for: url)
         } catch {
             errors.send(.bookmarkRefreshFailed(bookmarkKey))
             LivelyLogger.config.error("Failed to refresh bookmark for \(bookmarkKey): \(error.localizedDescription)")
             return
         }
-        
+
         var updatedBookmarks = config.bookmarks
         updatedBookmarks[bookmarkKey] = newData
 
         // A stale bookmark usually means the file was moved or renamed; keep the
         // stored path in step so the UI shows the real name.
-        let wallpaper = Self.wallpaper(config.dynamicWallpaper, replacing: bookmarkKey, with: url)
-
-        let refreshed = SpaceConfig(
-            spaceKey: config.spaceKey,
-            dynamicWallpaper: wallpaper,
-            bookmarks: updatedBookmarks,
-            addedAt: config.addedAt
+        configs[spaceKey] = config.replacing(
+            dynamicWallpaper: Self.wallpaper(config.dynamicWallpaper, replacing: bookmarkKey, with: url),
+            bookmarks: updatedBookmarks
         )
-        configs[spaceKey] = refreshed
         persist()
         LivelyLogger.config.info("Bookmark upgraded to security-scoped for \(bookmarkKey)")
     }
@@ -254,13 +245,7 @@ public class ConfigStore: ObservableObject {
 
         guard updated != existing.dynamicWallpaper else { return }
 
-        let refreshed = SpaceConfig(
-            spaceKey: existing.spaceKey,
-            dynamicWallpaper: updated,
-            bookmarks: existing.bookmarks,
-            addedAt: existing.addedAt
-        )
-        configs[key] = refreshed
+        configs[key] = existing.replacing(dynamicWallpaper: updated)
         persist()
     }
 
@@ -414,16 +399,15 @@ public class ConfigStore: ObservableObject {
 
     private func isConfigPlayable(_ config: SpaceConfig) -> Bool {
         let wallpaper = config.dynamicWallpaper
+        func playable(_ url: URL?, key: String) -> Bool {
+            guard let url, isValidLivelyVideoFile(url), config.bookmarks[key] != nil else { return false }
+            return true
+        }
         switch wallpaper.mode {
         case .staticVideo:
-            guard let url = wallpaper.staticURL,
-                  isValidLivelyVideoFile(url),
-                  config.bookmarks["static"] != nil else { return false }
-            return true
+            return playable(wallpaper.staticURL, key: "static")
         case .appearance:
-            let hasLight = wallpaper.lightURL.map { isValidLivelyVideoFile($0) && config.bookmarks["light"] != nil } ?? false
-            let hasDark = wallpaper.darkURL.map { isValidLivelyVideoFile($0) && config.bookmarks["dark"] != nil } ?? false
-            return hasLight || hasDark
+            return playable(wallpaper.lightURL, key: "light") || playable(wallpaper.darkURL, key: "dark")
         }
     }
 }

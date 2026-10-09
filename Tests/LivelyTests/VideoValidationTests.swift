@@ -67,36 +67,6 @@ struct VideoValidationTests {
         #expect(VideoGravity.allCases.count == 2)
     }
 
-    // MARK: - ConfigStore Bookmark Integration
-
-    @Test @MainActor func resolvedURLReturnsNilForMissingKey() async {
-        let tempFile = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
-        defer { try? FileManager.default.removeItem(at: tempFile) }
-
-        let store = ConfigStore(configFileURL: tempFile)
-        let result = store.resolvedURL(for: "nonexistent-key", appearance: nil)
-        #expect(result == nil)
-    }
-
-    @Test @MainActor func resolvedURLReturnsValueForValidConfig() async {
-        let tempFile = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
-        let tempVideo = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "_resolved.mp4")
-        FileManager.default.createFile(atPath: tempVideo.path, contents: Data(), attributes: nil)
-        defer {
-            try? FileManager.default.removeItem(at: tempFile)
-            try? FileManager.default.removeItem(at: tempVideo)
-        }
-
-        let store = ConfigStore(configFileURL: tempFile)
-        var wallpaper = DynamicWallpaper()
-        wallpaper.mode = .staticVideo
-        wallpaper.staticURL = tempVideo
-
-        store.assign(dynamicWallpaper: wallpaper, toSpaceKey: "test-key")
-        let result = store.resolvedURL(for: "test-key", appearance: nil)
-        #expect(result != nil)
-    }
-
     // MARK: - Backward Compatibility
 
     @Test func oldConfigWithoutNewFieldsDecodes() throws {

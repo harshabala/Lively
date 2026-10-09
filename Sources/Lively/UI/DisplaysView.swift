@@ -9,7 +9,6 @@ public struct DisplaysView: View {
     @ObservedObject private var preferences = AppPreferences.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ViewState private var displayedDays: Int = 0
-    @ViewState private var isLibraryButtonHovered = false
 
     public init(spaceMonitor: SpaceMonitor, configStore: ConfigStore) {
         self.spaceMonitor = spaceMonitor
@@ -237,9 +236,6 @@ public struct DisplaysView: View {
             RoundedRectangle(cornerRadius: LivelyBrand.Radius.md)
                 .strokeBorder(LivelyBrand.border.opacity(0.35), lineWidth: 1)
         )
-        .onHover { hovering in
-            isLibraryButtonHovered = hovering
-        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Open Wallpaper Library")
         .accessibilityHint("Open your reusable wallpaper library to add or apply videos.")

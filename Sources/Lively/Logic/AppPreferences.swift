@@ -119,8 +119,6 @@ public final class AppPreferences: ObservableObject {
         }
     }
 
-    public typealias FrameRateCap = MaxResolution
-
     private enum Keys {
         static let startMinimized = "prefs.startMinimized"
         static let pauseOnBattery = "prefs.pauseOnBattery"
@@ -205,32 +203,22 @@ public final class AppPreferences: ObservableObject {
         didSet { defaults.set(hasSeenSpacesCoach, forKey: Keys.hasSeenSpacesCoach) }
     }
 
-    public var frameRateCap: MaxResolution {
-        get { maxResolution }
-        set { maxResolution = newValue }
-    }
-
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
-        if defaults.object(forKey: Keys.startMinimized) == nil {
-            defaults.set(true, forKey: Keys.startMinimized)
+        func seedDefault(_ key: String, _ value: Any) {
+            if defaults.object(forKey: key) == nil { defaults.set(value, forKey: key) }
         }
-        if defaults.object(forKey: Keys.pauseOnBattery) == nil {
-            defaults.set(true, forKey: Keys.pauseOnBattery)
-        }
+        seedDefault(Keys.startMinimized, true)
+        seedDefault(Keys.pauseOnBattery, true)
+        seedDefault(Keys.hardwareDecoding, true)
+        seedDefault(Keys.batteryPauseThreshold, 35.0)
         // The GitHub update check is opt-in (README privacy promise). Builds up
         // to 1.2.0 wrote `true` here as a default on first launch, which is
         // indistinguishable from an explicit opt-in, so reset it once.
         if !defaults.bool(forKey: Keys.updateCheckOptInMigrated) {
             defaults.set(false, forKey: Keys.checkForUpdates)
             defaults.set(true, forKey: Keys.updateCheckOptInMigrated)
-        }
-        if defaults.object(forKey: Keys.hardwareDecoding) == nil {
-            defaults.set(true, forKey: Keys.hardwareDecoding)
-        }
-        if defaults.object(forKey: Keys.batteryPauseThreshold) == nil {
-            defaults.set(35.0, forKey: Keys.batteryPauseThreshold)
         }
 
         self.startMinimized = defaults.bool(forKey: Keys.startMinimized)
